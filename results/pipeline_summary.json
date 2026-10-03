@@ -1,0 +1,15 @@
+{
+  "reference_records": 26840,
+  "synthetic_records": 30000,
+  "features_used": 22,
+  "best_model_reference": "LinearRegression",
+  "best_R2_reference": 0.1815260314019631,
+  "best_MAE_reference": 0.9033073515559743,
+  "best_RMSE_reference": 1.116460327851533,
+  "best_model_combined": "LinearRegression",
+  "best_R2_combined": 0.18636430673643523,
+  "uq_coverage": 0.16263040238450074,
+  "uq_mean_width_eV": 0.4945350953755946,
+  "mc_max_corr_error": 0.03199250015548892,
+  "pareto_front_size": 11
+}

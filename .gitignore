@@ -1,0 +1,22 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Environments
+env/
+venv/
+.venv/
+ENV/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Large download caches (if downloaded manually)
+*.zip
+*.tar.gz
