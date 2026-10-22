@@ -11,6 +11,9 @@ from data_integrity import split_real_records
 from data_loader import _read_jarvis_archive, _require_real_identifiers
 from monte_carlo import generate_synthetic
 from config import ALL_DESCRIPTORS, TARGET_COLUMN
+from feature_engineering import engineer_features
+from explainability import bootstrap_uncertainty
+from sklearn.ensemble import RandomForestRegressor
 
 
 class ProvenanceTests(unittest.TestCase):
@@ -69,6 +72,36 @@ class MonteCarloTests(unittest.TestCase):
         first = generate_synthetic(frame, n_samples=4, seed=123)
         second = generate_synthetic(frame, n_samples=4, seed=123)
         pd.testing.assert_frame_equal(first, second)
+
+    def test_zero_density_does_not_create_extreme_derived_feature(self):
+        row = {
+            "mean_atomic_mass": 1.008, "density": 0.0,
+            "formation_energy_peratom": -0.1, "ehull": 0.0,
+            "mean_covalent_radius": 0.3, "a": 20.0, "b": 20.0,
+            "c": 20.0, "volume": 8000.0, "n_atoms": 1,
+            "n_elements": 1, "mean_atomic_number": 1,
+            "mean_electronegativity": 2.2, "std_atomic_mass": 0.0,
+            "std_electronegativity": 0.0, "std_covalent_radius": 0.0,
+            "max_electronegativity": 2.2, "min_electronegativity": 2.2,
+            TARGET_COLUMN: 5.137,
+        }
+        result = engineer_features(pd.DataFrame([row]), verbose=False)
+        self.assertTrue(np.isfinite(result["mass_density_ratio"].iloc[0]))
+        self.assertEqual(result["mass_density_ratio"].iloc[0], 0.0)
+
+    def test_bootstrap_intervals_use_training_only_oob_residuals(self):
+        rng = np.random.default_rng(5)
+        x = rng.normal(size=(100, 3))
+        y = x[:, 0] * 2.0 + rng.normal(scale=0.5, size=len(x))
+        result = bootstrap_uncertainty(
+            RandomForestRegressor,
+            {"n_estimators": 10, "random_state": 3, "n_jobs": 1},
+            x[:80], y[:80], x[80:], n_bootstraps=8, confidence=0.9,
+        )
+        self.assertGreater(result["calibration_residual_count"], 0)
+        self.assertTrue(np.all(result["lower"] <= result["mean"]))
+        self.assertTrue(np.all(result["upper"] >= result["mean"]))
+        self.assertGreater(float(np.mean(result["upper"] - result["lower"])), 0.0)
 
 
 if __name__ == "__main__":

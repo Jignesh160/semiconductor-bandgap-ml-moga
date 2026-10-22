@@ -1,9 +1,31 @@
-# Project report status
+# Verified pipeline run
 
-This repository does not currently contain a verified real-material benchmark. The checked-in reference CSV uses IDs of the form `SURR-*` and the formula `SurrogateCompound`; these are generated statistical samples, not JARVIS records. Earlier metric tables and optimizer outputs are retained in Git/results as historical artifacts, but they were not reproduced in this audit and must not be presented as real-material findings.
+## Data and method
 
-The original evaluation also generated MCS from the complete reference table before splitting, then split the combined real and synthetic table separately. Thus its augmented scores were not measured on the same untouched real test records as its real-only scores. The pipeline has been changed to split first, fit MCS on training rows only, and evaluate both training regimes on the same real test set. That corrected pipeline has **not** been run: the reference cache is rejected by the provenance guard, and required packages are missing in the inspected environment.
+The pipeline retrieved JARVIS-DFT `dft_3d` version-11 file `64391379` from the official [Figshare record](https://doi.org/10.6084/m9.figshare.6815699). It read 93,902 records, extracted descriptors, and retained 26,840 positive-gap records. The resulting cache contains 26,840 unique JARVIS IDs, no missing cells or duplicate rows, and target range 0.001–18.179 eV (mean 2.02367 eV).
 
-The NSGA-II search operates over continuous descriptor vectors without compositions or structures. Such outputs are hypothetical descriptor-space candidates, not identified or verified materials. The included RAG corpus consists of hard-coded sample passages without verifiable source metadata; its self-annotation score is not a scientific RAG quality result.
+With seed 42, 21,472 real records were used for training and 5,368 for testing. A Gaussian copula fit only to the real training rows generated 30,000 synthetic rows. Real-only and real+MCS models were evaluated on the same untouched real test records. MCS target labels are generated estimates, not independent DFT results.
 
-See [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md), [docs/EXPERIMENT_PROTOCOL.md](docs/EXPERIMENT_PROTOCOL.md), and [docs/RAG_EVALUATION.md](docs/RAG_EVALUATION.md). Add quantitative findings here only after obtaining verified JARVIS records, installing project dependencies, running the corrected pipeline, and preserving the exact split/configuration used.
+## Model comparison
+
+| Training data | Best model | Test MAE (eV) | Test RMSE (eV) | Test R² | Test count |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Real only | Random Forest | 0.560019 | 0.818547 | 0.794483 | 5,368 |
+| Real + MCS | Random Forest | 0.607950 | 0.873358 | 0.766038 | 5,368 |
+
+On this split, MCS augmentation worsened the Random Forest results. The sampler's maximum absolute Pearson-correlation difference was 0.183155, so it did not fully preserve dependency patterns.
+
+## Explainability, uncertainty and optimization
+
+- SHAP was computed for the fitted real-only Random Forest on 100 held-out examples. Attributions describe model behavior and do not establish causation.
+- Prediction intervals calibrated from 236,796 out-of-bag training residuals achieved 89.92% coverage for nominal 90% intervals on the held-out set; mean interval width was 2.805 eV. This is one split’s empirical coverage, not a guarantee for new populations.
+- NSGA-II returned four feasible, non-dominated continuous descriptor candidates, with predicted band gaps from 1.4886 to 1.5000 eV. They have no verified material IDs, formulas, or structures and are hypothetical outputs, not material recommendations.
+
+## Reproduction and limits
+
+```powershell
+python main_pipeline.py
+python -m unittest discover -s tests -v
+```
+
+The completed pipeline produced tables and JSON under `results/` and plots under `figures/`; all nine tests passed. The RAG passages remain an uncited demonstration corpus and are not evaluated as scientific evidence. The random split is not composition/structure grouped. Predictions and optimization outputs are not experimental validation.

@@ -41,20 +41,23 @@ import os
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Physical bounds: (min, max) for each descriptor – reject outside
+# Physical lower bounds. Samples map through training empirical marginals, so
+# arbitrary upper caps would truncate observed training values and alter the
+# modeled joint distribution.
 # ──────────────────────────────────────────────────────────────────────
-_BOUNDS = {
-    "formation_energy_peratom": (-8.0, 4.0),
-    "ehull":                    (0.0, 5.0),
-    "density":                  (0.1, 25.0),
-    "mean_atomic_mass":         (1.0, 250.0),
-    "mean_covalent_radius":     (0.25, 2.7),
-    "a":                        (1.0, 50.0),
-    "b":                        (1.0, 50.0),
-    "c":                        (1.0, 50.0),
-    "volume":                   (5.0, 10_000.0),
-    "n_atoms":                  (1, 200),
-    TARGET_COLUMN:              (0.001, 15.0),
+_LOWER_BOUNDS = {
+    "ehull": 0.0,
+    "density": 1e-12,
+    "mean_atomic_mass": 0.0,
+    "mean_atomic_number": 0.0,
+    "mean_covalent_radius": 0.0,
+    "a": 0.0,
+    "b": 0.0,
+    "c": 0.0,
+    "volume": 0.0,
+    "n_atoms": 1.0,
+    "n_elements": 1.0,
+    TARGET_COLUMN: 0.0,
 }
 
 
@@ -135,9 +138,8 @@ def generate_synthetic(
             # Hard physical bounds rejection
             mask = np.ones(batch, dtype=bool)
             for j, col in enumerate(col_names):
-                if col in _BOUNDS:
-                    lo, hi = _BOUNDS[col]
-                    mask &= (synth[:, j] >= lo) & (synth[:, j] <= hi)
+                if col in _LOWER_BOUNDS:
+                    mask &= synth[:, j] >= _LOWER_BOUNDS[col]
 
             good = synth[mask]
             if len(good) > 0:
