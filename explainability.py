@@ -61,6 +61,16 @@ def shap_analysis(model, X: np.ndarray, feature_names: list[str]):
         inner = model.named_steps[step_names[-1]]
         model_type = type(inner).__name__
 
+    if model_type == "VotingRegressor" or hasattr(inner, "named_estimators_"):
+        if hasattr(inner, "named_estimators_") and "lr" in inner.named_estimators_:
+            inner = inner.named_estimators_["lr"]
+            if hasattr(inner, "named_steps"):
+                step_names = list(inner.named_steps.keys())
+                if "scaler" in inner.named_steps:
+                    X_sample = inner.named_steps["scaler"].transform(X_sample)
+                inner = inner.named_steps[step_names[-1]]
+            model_type = type(inner).__name__
+
     tree_types = {
         "RandomForestRegressor",
         "GradientBoostingRegressor",

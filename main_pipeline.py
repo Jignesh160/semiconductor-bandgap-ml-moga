@@ -75,6 +75,13 @@ def _divider(title: str):
 
 def main():
     # ──────────────────────────────────────────────────────────────────
+    # Stage 0: Literature Data Collection (NER + RAG)
+    # ──────────────────────────────────────────────────────────────────
+    _divider("Stage 0 — Literature Data Collection (NER + RAG)")
+    from ner_rag_pipeline import run_ner_rag_pipeline
+    lit_df, ner_error_rate = run_ner_rag_pipeline()
+
+    # ──────────────────────────────────────────────────────────────────
     # Stage 1: Load reference data
     # ──────────────────────────────────────────────────────────────────
     _divider("Stage 1 — Load JARVIS Reference Data")
@@ -245,7 +252,7 @@ def main():
           f"[{pareto_df['predicted_bandgap'].min():.3f}, "
           f"{pareto_df['predicted_bandgap'].max():.3f}] eV")
 
-    plot_pareto_front(moga_result)
+    plot_pareto_front(moga_result, pareto_df=pareto_df)
     plot_pareto_bandgap_dist(pareto_df)
 
     # ──────────────────────────────────────────────────────────────────
@@ -266,7 +273,7 @@ def main():
         "uq_coverage": float(coverage),
         "uq_mean_width_eV": float(mean_width),
         "mc_max_corr_error": val["max_corr_err"],
-        "pareto_front_size": int(len(moga_result.F)),
+        "pareto_front_size": int(len(pareto_df)),
     }
 
     summary_path = os.path.join(RESULTS_DIR, "pipeline_summary.json")

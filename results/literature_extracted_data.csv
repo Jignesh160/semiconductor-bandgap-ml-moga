@@ -1,0 +1,9 @@
+material,bandgap_eV,synthesis_method,temperature_C,substrate,doc_id,title
+GaN,3.42,MOCVD,1050.0,sapphire (0001),paper_01,Epitaxial growth and optical characterization of Gallium Nitride films
+CdTe,1.48,Close-Spaced Sublimation,580.0,,paper_02,Band gap engineering of high-efficiency Cadmium Telluride for photovoltaics
+MoS2,1.82,CVD,750.0,SiO2/Si,paper_03,Growth temperature dependence of chemical vapor deposition of MoS2 monolayers
+ZnO,3.31,sputtering,450.0,quartz,paper_04,Structural and optical properties of ZnO thin films deposited by RF sputtering
+CH3NH3PbI3,1.55,spin-coating,100.0,ITO,paper_05,Solution-processed lead halide perovskites CH3NH3PbI3 for tandem solar cells
+GaAs,1.42,MBE,550.0,GaAs (111)B,paper_06,Electronic structure and transport in Gallium Arsenide nanowires
+InP,1.95,hot injection,260.0,,paper_07,Indium Phosphide quantum dots for optoelectronic applications
+4H-SiC,,,1150.0,,paper_08,Thermal oxidation and characterization of Silicon Carbide for high-power devices

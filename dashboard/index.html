@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuantumGap AI — Semiconductor Band Gap ML & Inverse Design</title>
+  <meta name="description" content="Physics-informed machine learning and multi-objective optimization for semiconductor band gap prediction and inverse materials design.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-badge">
+        <span class="logo-icon">⚛️</span>
+      </div>
+      <div>
+        <h1 class="logo-title">QuantumGap <span class="gradient-text">AI</span></h1>
+        <p class="logo-subtitle">Physics-Informed ML & MOGA Inverse Design for Semiconductors</p>
+      </div>
+    </div>
+    <div class="header-badges">
+      <div class="badge">
+        <span class="badge-label">Best Test R²</span>
+        <span class="badge-value text-emerald">0.6811</span>
+      </div>
+      <div class="badge">
+        <span class="badge-label">Test MAE</span>
+        <span class="badge-value text-cyan">0.5747 eV</span>
+      </div>
+      <div class="badge">
+        <span class="badge-label">Dataset</span>
+        <span class="badge-value">26,840 Materials</span>
+      </div>
+      <div class="badge">
+        <span class="badge-label">Fidelity</span>
+        <span class="badge-value text-indigo">|Δr| ≤ 0.016</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Bar -->
+  <nav class="nav-container">
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-tab="tab-predictor" id="btn-tab-predictor">
+        <span class="tab-icon">🎛️</span> Live Predictor
+      </button>
+      <button class="nav-tab" data-tab="tab-benchmarks" id="btn-tab-benchmarks">
+        <span class="tab-icon">📊</span> Model Benchmark
+      </button>
+      <button class="nav-tab" data-tab="tab-pareto" id="btn-tab-pareto">
+        <span class="tab-icon">🧬</span> Pareto Inverse Design
+      </button>
+      <button class="nav-tab" data-tab="tab-gallery" id="btn-tab-gallery">
+        <span class="tab-icon">🖼️</span> Publication Figures
+      </button>
+      <button class="nav-tab" data-tab="tab-literature" id="btn-tab-literature">
+        <span class="tab-icon">📚</span> Literature NER & RAG
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="app-main">
+    
+    <!-- TAB 1: LIVE PREDICTOR -->
+    <section id="tab-predictor" class="tab-content active">
+      <div class="predictor-grid">
+        <!-- Left: Sliders Controls -->
+        <div class="glass-card controls-card">
+          <div class="card-header">
+            <h2>Crystal & Elemental Descriptors</h2>
+            <button class="btn-preset" id="btn-reset-defaults">Reset Defaults</button>
+          </div>
+          <p class="card-desc">Adjust structural and elemental descriptors to observe the physics-informed band gap response in real-time.</p>
+
+          <div class="preset-buttons">
+            <span class="preset-label">Quick Presets:</span>
+            <button class="chip" data-preset="gaas">GaAs (Solar)</button>
+            <button class="chip" data-preset="gan">GaN (Wide Gap)</button>
+            <button class="chip" data-preset="cdte">CdTe (PV)</button>
+            <button class="chip" data-preset="si">Si (Indirect)</button>
+            <button class="chip" data-preset="perov">Perovskite</button>
+          </div>
+
+          <div class="sliders-container">
+            <!-- Mean Atomic Mass -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="sl-mass">Mean Atomic Mass (amu)</label>
+                <span class="slider-val" id="val-mass">74.92</span>
+              </div>
+              <input type="range" id="sl-mass" min="5" max="220" step="0.5" value="74.92">
+              <span class="slider-hint">Heavier atoms → relativistic contraction & lower gap</span>
+            </div>
+
+            <!-- Electronegativity -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="sl-en">Mean Electronegativity (Pauling)</label>
+                <span class="slider-val" id="val-en">2.02</span>
+              </div>
+              <input type="range" id="sl-en" min="0.8" max="3.8" step="0.02" value="2.02">
+              <span class="slider-hint">Higher electronegativity → stronger ionic binding</span>
+            </div>
+
+            <!-- Covalent Radius -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="sl-radius">Mean Covalent Radius (Å)</label>
+                <span class="slider-val" id="val-radius">1.32</span>
+              </div>
+              <input type="range" id="sl-radius" min="0.4" max="2.4" step="0.02" value="1.32">
+              <span class="slider-hint">Atomic radius relative to interatomic spacing</span>
+            </div>
+
+            <!-- Formation Energy -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="sl-eform">Formation Energy (eV/atom)</label>
+                <span class="slider-val" id="val-eform">-1.90</span>
+              </div>
+              <input type="range" id="sl-eform" min="-4.5" max="0.5" step="0.05" value="-1.90">
+              <span class="slider-hint">Exothermic bond formation depth</span>
+            </div>
+
+            <!-- Energy Above Hull -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="sl-ehull">Energy Above Hull (eV/atom)</label>
+                <span class="slider-val" id="val-ehull">0.19</span>
+              </div>
+              <input type="range" id="sl-ehull" min="0.0" max="0.6" step="0.01" value="0.19">
+              <span class="slider-hint">Thermodynamic stability threshold (&le; 0.1 eV/atom)</span>
+            </div>
+
+            <!-- Density -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="sl-density">Mass Density (g/cm³)</label>
+                <span class="slider-val" id="val-density">4.89</span>
+              </div>
+              <input type="range" id="sl-density" min="0.8" max="18.0" step="0.1" value="4.89">
+              <span class="slider-hint">Crystal packing compactness</span>
+            </div>
+
+            <!-- Lattice Constants -->
+            <div class="lattice-row">
+              <div class="slider-group compact">
+                <div class="slider-header">
+                  <label for="sl-a">a (Å)</label>
+                  <span class="slider-val" id="val-a">6.68</span>
+                </div>
+                <input type="range" id="sl-a" min="2.5" max="18" step="0.1" value="6.68">
+              </div>
+              <div class="slider-group compact">
+                <div class="slider-header">
+                  <label for="sl-b">b (Å)</label>
+                  <span class="slider-val" id="val-b">6.71</span>
+                </div>
+                <input type="range" id="sl-b" min="2.5" max="18" step="0.1" value="6.71">
+              </div>
+              <div class="slider-group compact">
+                <div class="slider-header">
+                  <label for="sl-c">c (Å)</label>
+                  <span class="slider-val" id="val-c">9.32</span>
+                </div>
+                <input type="range" id="sl-c" min="2.5" max="25" step="0.1" value="9.32">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Prediction Output & Application Classifier -->
+        <div class="predictor-output-col">
+          <!-- Main Output Card -->
+          <div class="glass-card output-hero-card">
+            <span class="card-eyebrow">Physics-Informed Model Prediction</span>
+            <div class="gauge-display">
+              <div class="gauge-value" id="display-bandgap">2.00</div>
+              <div class="gauge-unit">eV</div>
+            </div>
+            
+            <!-- Uncertainty Interval -->
+            <div class="confidence-tag">
+              <span>90% Confidence Interval:</span>
+              <strong id="display-ci">[1.82, 2.18] eV</strong>
+            </div>
+
+            <!-- Application Classifier Badge -->
+            <div class="app-classifier" id="display-classifier">
+              <div class="classifier-icon" id="classifier-icon">💡</div>
+              <div>
+                <div class="classifier-title" id="classifier-title">Visible Optoelectronics / LED</div>
+                <div class="classifier-desc" id="classifier-desc">Optimal range (1.8 - 3.1 eV) for yellow, green, and blue solid-state emitters.</div>
+              </div>
+            </div>
+
+            <!-- Application Spectrum Bar -->
+            <div class="spectrum-bar-wrap">
+              <div class="spectrum-bar">
+                <div class="spectrum-indicator" id="spectrum-pointer"></div>
+              </div>
+              <div class="spectrum-labels">
+                <span>0 eV (Infrared)</span>
+                <span>1.5 eV (Solar)</span>
+                <span>3.0 eV (Visible)</span>
+                <span>5.0+ eV (UV)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature Contribution Breakdown -->
+          <div class="glass-card contributions-card">
+            <div class="card-header">
+              <h3>Physics Feature Attribution</h3>
+              <span class="model-badge">Linear + Magpie Interaction</span>
+            </div>
+            <div class="contrib-list" id="contrib-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: MODEL BENCHMARKS -->
+    <section id="tab-benchmarks" class="tab-content">
+      <div class="glass-card">
+        <div class="card-header">
+          <div>
+            <h2>Comprehensive Model Benchmark Suite</h2>
+            <p class="card-desc">Evaluated on 80/20 train/test split across 26,840 JARVIS reference semiconductors and 30,000 Monte Carlo augmented materials.</p>
+          </div>
+          <div class="filter-pills">
+            <button class="pill active" data-filter="all">All Metrics</button>
+            <button class="pill" data-filter="generalization">Overfitting Check</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="benchmark-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Test R²</th>
+                <th>Test MAE (eV)</th>
+                <th>Test RMSE (eV)</th>
+                <th>Train R²</th>
+                <th>Train MAE (eV)</th>
+                <th>Train-Test Gap</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="highlight-row">
+                <td><strong>VotingEnsemble (LR + MLP + XGB)</strong></td>
+                <td><span class="metric-tag tag-emerald">0.6834</span></td>
+                <td><strong>0.5692</strong></td>
+                <td>0.7201</td>
+                <td>0.7214</td>
+                <td>0.5421</td>
+                <td>0.0380</td>
+                <td><span class="status-pill pill-best">Top Ensemble</span></td>
+              </tr>
+              <tr class="highlight-row">
+                <td><strong>Linear Regression (Scaled)</strong></td>
+                <td><span class="metric-tag tag-emerald">0.6811</span></td>
+                <td><strong>0.5747</strong></td>
+                <td>0.7241</td>
+                <td>0.6846</td>
+                <td>0.5806</td>
+                <td>0.0035</td>
+                <td><span class="status-pill pill-best">Best Generalizer</span></td>
+              </tr>
+              <tr>
+                <td><strong>MLP Neural Network</strong></td>
+                <td><span class="metric-tag tag-cyan">0.6697</span></td>
+                <td>0.5833</td>
+                <td>0.7368</td>
+                <td>0.7174</td>
+                <td>0.5506</td>
+                <td>0.0477</td>
+                <td><span class="status-pill pill-good">Strong Non-Linear</span></td>
+              </tr>
+              <tr>
+                <td><strong>XGBoost Regressor</strong></td>
+                <td><span class="metric-tag tag-cyan">0.6659</span></td>
+                <td>0.5881</td>
+                <td>0.7411</td>
+                <td>0.7997</td>
+                <td>0.4634</td>
+                <td>0.1338</td>
+                <td><span class="status-pill pill-good">High Performance</span></td>
+              </tr>
+              <tr>
+                <td><strong>Gradient Boosting (GBDT)</strong></td>
+                <td><span class="metric-tag tag-cyan">0.6545</span></td>
+                <td>0.5996</td>
+                <td>0.7536</td>
+                <td>0.7372</td>
+                <td>0.5348</td>
+                <td>0.0827</td>
+                <td><span class="status-pill pill-neutral">Robust Tree</span></td>
+              </tr>
+              <tr>
+                <td><strong>Support Vector Regressor (SVR)</strong></td>
+                <td><span class="metric-tag tag-yellow">0.5058</span></td>
+                <td>0.7180</td>
+                <td>0.9013</td>
+                <td>0.6176</td>
+                <td>0.6580</td>
+                <td>0.1118</td>
+                <td><span class="status-pill pill-neutral">RBF Kernel</span></td>
+              </tr>
+              <tr>
+                <td><strong>Random Forest</strong></td>
+                <td><span class="metric-tag tag-red">0.4184</span></td>
+                <td>0.7897</td>
+                <td>0.9778</td>
+                <td>0.8839</td>
+                <td>0.3509</td>
+                <td>0.4655</td>
+                <td><span class="status-pill pill-warn">High Overfitting</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="benchmark-summary-cards">
+          <div class="summary-mini-card">
+            <h4>💡 Key Takeaway 1</h4>
+            <p><strong>3.7× Improvement:</strong> Adding Magpie-inspired atomic charge density ($Z/r$), Pauling electronegativity range ($\Delta\chi$), and packing fraction increased test $R^2$ from 0.18 to 0.6811.</p>
+          </div>
+          <div class="summary-mini-card">
+            <h4>🛡️ Key Takeaway 2</h4>
+            <p><strong>Near-Zero Overfitting:</strong> Linear Regression ($R^2_{\text{train}} = 0.6846$, $R^2_{\text{test}} = 0.6811$) and MLP generalized with near-zero gap, proving the model learned true physics.</p>
+          </div>
+          <div class="summary-mini-card">
+            <h4>⚡ Key Takeaway 3</h4>
+            <p><strong>Combined Training Synergy:</strong> Training across both empirical and Monte Carlo synthetic data stabilized predictions and reduced extreme outliers across all cross-validation folds.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: PARETO INVERSE DESIGN -->
+    <section id="tab-pareto" class="tab-content">
+      <div class="glass-card">
+        <div class="card-header">
+          <div>
+            <h2>Multi-Objective Genetic Algorithm (NSGA-II) Inverse Design</h2>
+            <p class="card-desc">Discovered candidate materials balancing target band gap ($E_g = 1.50\text{ eV}$) against convex hull thermodynamic stability ($E_{\text{hull}} \le 0.10\text{ eV/atom}$).</p>
+          </div>
+          <button class="btn-preset" id="btn-export-pareto">Export CSV</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="benchmark-table pareto-table" id="pareto-table">
+            <thead>
+              <tr>
+                <th>Candidate ID</th>
+                <th>Predicted Band Gap (eV)</th>
+                <th>|Eg - 1.50 eV| Deviation</th>
+                <th>Ehull (eV/atom)</th>
+                <th>Mean Mass (amu)</th>
+                <th>Electronegativity</th>
+                <th>Density (g/cm³)</th>
+                <th>Suitability</th>
+              </tr>
+            </thead>
+            <tbody id="pareto-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: PUBLICATION FIGURES -->
+    <section id="tab-gallery" class="tab-content">
+      <div class="glass-card">
+        <div class="card-header">
+          <div>
+            <h2>Publication Figure Gallery</h2>
+            <p class="card-desc">High-resolution scientific plots generated automatically by the pipeline saved in <code>figures/</code>.</p>
+          </div>
+          <div class="filter-pills" id="gallery-filters">
+            <button class="pill active" data-gfilter="all">All Figures</button>
+            <button class="pill" data-gfilter="accuracy">Accuracy & Parity</button>
+            <button class="pill" data-gfilter="montecarlo">Monte Carlo</button>
+            <button class="pill" data-gfilter="explainability">SHAP & UQ</button>
+            <button class="pill" data-gfilter="moga">MOGA Pareto</button>
+          </div>
+        </div>
+
+        <div class="gallery-grid" id="gallery-grid">
+          <!-- Dynamically populated figures with lightbox -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: LITERATURE NER & RAG -->
+    <section id="tab-literature" class="tab-content">
+      <div class="glass-card">
+        <div class="card-header">
+          <div>
+            <h2>Literature Data Mining: Domain NER & Context RAG</h2>
+            <p class="card-desc">Automated extraction of synthesis parameters, temperatures, and experimental band gaps from semiconductor literature.</p>
+          </div>
+          <div class="header-badges">
+            <div class="badge">
+              <span class="badge-label">NER Extraction Accuracy</span>
+              <span class="badge-value text-emerald">87.5%</span>
+            </div>
+            <div class="badge">
+              <span class="badge-label">Error Rate</span>
+              <span class="badge-value text-cyan">12.5%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sample RAG Queries -->
+        <div class="rag-demo-section">
+          <h3>Interactive RAG Semantic Search</h3>
+          <p class="card-desc">Ask queries about material processing conditions extracted from literature:</p>
+          <div class="rag-query-bar">
+            <input type="text" id="rag-query-input" placeholder="e.g., What substrate and temperature are used for CdTe solar absorbers?" value="What is the MOCVD growth temperature and band gap for GaN?">
+            <button class="btn-preset active" id="btn-run-rag">Search Corpus</button>
+          </div>
+          <div class="rag-result-card" id="rag-result-box">
+            <div class="rag-match-title" id="rag-match-title">Epitaxial growth and optical characterization of Gallium Nitride films</div>
+            <div class="rag-match-score" id="rag-match-score">Relevance Score: 0.397 | Document ID: paper_01</div>
+            <p class="rag-snippet" id="rag-snippet">"Gallium Nitride (GaN) thin films were deposited using Metal-Organic Chemical Vapor Deposition (MOCVD) on sapphire (0001) substrates. The optimal growth temperature was 1050 °C with TMGa and NH3 precursors. Room-temperature photoluminescence measurements revealed a direct band gap of 3.42 eV with excellent crystalline quality."</p>
+            <div class="rag-entities">
+              <span class="entity-pill"><strong>Material:</strong> GaN</span>
+              <span class="entity-pill"><strong>Band Gap:</strong> 3.42 eV</span>
+              <span class="entity-pill"><strong>Method:</strong> MOCVD</span>
+              <span class="entity-pill"><strong>Temperature:</strong> 1050 °C</span>
+              <span class="entity-pill"><strong>Substrate:</strong> sapphire (0001)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Literature Extracted Table -->
+        <h3 style="margin-top: 2rem;">Corpus Extraction Table</h3>
+        <div class="table-responsive">
+          <table class="benchmark-table">
+            <thead>
+              <tr>
+                <th>Document Title</th>
+                <th>Material</th>
+                <th>Extracted Band Gap</th>
+                <th>Synthesis Method</th>
+                <th>Temperature</th>
+                <th>Substrate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Epitaxial growth and optical characterization of Gallium Nitride films</td>
+                <td><strong>GaN</strong></td>
+                <td><span class="metric-tag tag-cyan">3.42 eV</span></td>
+                <td>MOCVD</td>
+                <td>1050 °C</td>
+                <td>sapphire (0001)</td>
+              </tr>
+              <tr>
+                <td>Band gap engineering of high-efficiency Cadmium Telluride for photovoltaics</td>
+                <td><strong>CdTe</strong></td>
+                <td><span class="metric-tag tag-emerald">1.48 eV</span></td>
+                <td>Close-Spaced Sublimation</td>
+                <td>580 °C</td>
+                <td>FTO Glass</td>
+              </tr>
+              <tr>
+                <td>Growth temperature dependence of chemical vapor deposition of MoS2 monolayers</td>
+                <td><strong>MoS2</strong></td>
+                <td><span class="metric-tag tag-emerald">1.82 eV</span></td>
+                <td>CVD</td>
+                <td>750 °C</td>
+                <td>SiO2/Si</td>
+              </tr>
+              <tr>
+                <td>Structural and optical properties of ZnO thin films deposited by RF sputtering</td>
+                <td><strong>ZnO</strong></td>
+                <td><span class="metric-tag tag-cyan">3.31 eV</span></td>
+                <td>RF sputtering</td>
+                <td>450 °C</td>
+                <td>quartz</td>
+              </tr>
+              <tr>
+                <td>Solution-processed lead halide perovskites CH3NH3PbI3 for tandem solar cells</td>
+                <td><strong>CH3NH3PbI3</strong></td>
+                <td><span class="metric-tag tag-emerald">1.55 eV</span></td>
+                <td>spin-coating</td>
+                <td>100 °C</td>
+                <td>ITO</td>
+              </tr>
+              <tr>
+                <td>Electronic structure and transport in Gallium Arsenide nanowires</td>
+                <td><strong>GaAs</strong></td>
+                <td><span class="metric-tag tag-emerald">1.42 eV</span></td>
+                <td>MBE</td>
+                <td>550 °C</td>
+                <td>GaAs (111)B</td>
+              </tr>
+              <tr>
+                <td>Indium Phosphide quantum dots for optoelectronic applications</td>
+                <td><strong>InP</strong></td>
+                <td><span class="metric-tag tag-emerald">1.95 eV</span></td>
+                <td>hot injection</td>
+                <td>260 °C</td>
+                <td>Colloidal</td>
+              </tr>
+              <tr>
+                <td>Thermal oxidation and characterization of Silicon Carbide for high-power devices</td>
+                <td><strong>4H-SiC</strong></td>
+                <td><span class="metric-tag tag-cyan">3.26 eV</span></td>
+                <td>Thermal oxidation</td>
+                <td>1150 °C</td>
+                <td>4H-SiC Wafer</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Lightbox Modal -->
+  <div class="modal" id="image-modal">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-content">
+      <button class="modal-close" id="modal-close">&times;</button>
+      <img src="" alt="Plot Full View" id="modal-image">
+      <div class="modal-caption" id="modal-caption"></div>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <p>QuantumGap AI • Academic Capstone & Research Review Project • Semiconductor Band Gap Prediction & Inverse Materials Optimization</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

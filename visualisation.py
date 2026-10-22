@@ -352,15 +352,23 @@ def plot_train_vs_test_comparison(results_df: pd.DataFrame):
 # 4.  MOGA Pareto front
 # ──────────────────────────────────────────────────────────────────────
 
-def plot_pareto_front(result):
+def plot_pareto_front(result, pareto_df: pd.DataFrame | None = None):
     """Scatter of the Pareto front: Obj 1 (|Δbg|) vs Obj 2 (ehull)."""
-    F = result.F
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.scatter(F[:, 0], F[:, 1], s=30, c="darkorange", edgecolors="k",
-               linewidths=0.5, alpha=0.8)
+    if pareto_df is not None and len(pareto_df) > 0:
+        x_vals = pareto_df["obj_bg_deviation"]
+        y_vals = pareto_df["obj_ehull"]
+        sc = ax.scatter(x_vals, y_vals, c=pareto_df["predicted_bandgap"], cmap="viridis",
+                        s=55, edgecolors="k", linewidths=0.6, alpha=0.9)
+        cbar = plt.colorbar(sc, ax=ax)
+        cbar.set_label("Predicted Band Gap (eV)", fontsize=11)
+    else:
+        F = result.F
+        ax.scatter(F[:, 0], F[:, 1], s=40, c="darkorange", edgecolors="k",
+                   linewidths=0.5, alpha=0.8)
     ax.set_xlabel("|Band Gap − Target| (eV)", fontsize=13)
     ax.set_ylabel("Energy Above Hull (eV/atom)", fontsize=13)
-    ax.set_title("MOGA Pareto Front", fontsize=15)
+    ax.set_title("MOGA Pareto Optimal Frontier", fontsize=15)
     plt.tight_layout()
     path = os.path.join(FIGURES_DIR, "pareto_front.png")
     fig.savefig(path, dpi=PLOT_DPI)

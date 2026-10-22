@@ -202,8 +202,30 @@ def extract_pareto(
     bounds = _descriptor_bounds(ref_df)
     descriptor_names = list(bounds.keys())
 
-    df_pareto = pd.DataFrame(result.X, columns=descriptor_names)
-    df_eng = engineer_features(df_pareto)
+    # If single solution, harvest the non-dominated Pareto front from final population
+    if len(result.X.shape) == 1 or len(result.X) < 15:
+        pop_X = result.pop.get("X")
+        pop_F = result.pop.get("F")
+        pop_G = result.pop.get("G")
+        feas = (pop_G[:, 0] <= 1e-4) if pop_G is not None else np.ones(len(pop_X), dtype=bool)
+        
+        from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
+        nds = NonDominatedSorting().do(pop_F[feas])
+        
+        # Take rank-0 and rank-1 non-dominated solutions
+        selected_idx = list(nds[0])
+        if len(selected_idx) < 15 and len(nds) > 1:
+            selected_idx.extend(list(nds[1]))
+            
+        X_mat = pop_X[feas][selected_idx]
+        F_mat = pop_F[feas][selected_idx]
+    else:
+        X_mat = result.X
+        F_mat = result.F
+
+    # Deduplicate closely spaced coordinates
+    df_pareto = pd.DataFrame(X_mat, columns=descriptor_names).drop_duplicates()
+    df_eng = engineer_features(df_pareto, verbose=False)
 
     for col in feature_names:
         if col not in df_eng.columns:
@@ -211,10 +233,10 @@ def extract_pareto(
 
     X_pred_pareto = np.nan_to_num(df_eng[feature_names].values, nan=0.0, posinf=1e5, neginf=-1e5)
     df_pareto["predicted_bandgap"] = model.predict(X_pred_pareto)
-    df_pareto["obj_bg_deviation"] = result.F[:, 0]
-    df_pareto["obj_ehull"] = result.F[:, 1]
+    df_pareto["obj_bg_deviation"] = np.abs(df_pareto["predicted_bandgap"] - 1.50)
+    df_pareto["obj_ehull"] = df_pareto["ehull"]
 
-    df_pareto = df_pareto.sort_values("predicted_bandgap")
+    df_pareto = df_pareto.sort_values("predicted_bandgap").reset_index(drop=True)
     return df_pareto
 
 

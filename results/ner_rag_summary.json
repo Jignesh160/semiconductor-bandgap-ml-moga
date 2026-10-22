@@ -1,0 +1,47 @@
+{
+  "documents_indexed": 8,
+  "total_fields_evaluated": 32,
+  "extraction_accuracy_pct": 87.5,
+  "extraction_error_rate_pct": 12.5,
+  "rag_sample_queries": [
+    {
+      "query": "What is the MOCVD growth temperature and band gap for GaN?",
+      "source_doc": "paper_01",
+      "title": "Epitaxial growth and optical characterization of Gallium Nitride films",
+      "relevance_score": 0.397,
+      "extracted": {
+        "material": "GaN",
+        "bandgap_eV": 3.42,
+        "synthesis_method": "MOCVD",
+        "temperature_C": 1050.0,
+        "substrate": "sapphire (0001)"
+      }
+    },
+    {
+      "query": "What substrate and temperature are used for CdTe solar absorbers?",
+      "source_doc": "paper_02",
+      "title": "Band gap engineering of high-efficiency Cadmium Telluride for photovoltaics",
+      "relevance_score": 0.426,
+      "extracted": {
+        "material": "CdTe",
+        "bandgap_eV": 1.48,
+        "synthesis_method": "Close-Spaced Sublimation",
+        "temperature_C": 580.0,
+        "substrate": null
+      }
+    },
+    {
+      "query": "What is the synthesis method and band gap of MoS2 monolayers?",
+      "source_doc": "paper_03",
+      "title": "Growth temperature dependence of chemical vapor deposition of MoS2 monolayers",
+      "relevance_score": 0.32,
+      "extracted": {
+        "material": "MoS2",
+        "bandgap_eV": 1.82,
+        "synthesis_method": "CVD",
+        "temperature_C": 750.0,
+        "substrate": "SiO2/Si"
+      }
+    }
+  ]
+}

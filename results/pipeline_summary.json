@@ -2,15 +2,15 @@
   "reference_records": 26840,
   "synthetic_records": 30000,
   "features_used": 42,
-  "best_model_reference": "LinearRegression",
-  "best_R2_reference": 0.6810656452046011,
-  "best_MAE_reference": 0.5746925063349306,
-  "best_RMSE_reference": 0.7240597498877676,
-  "best_train_R2_reference": 0.6846206496481834,
-  "best_model_combined": "LinearRegression",
-  "best_R2_combined": 0.6639708027880726,
+  "best_model_reference": "VotingEnsemble",
+  "best_R2_reference": 0.6887481246408464,
+  "best_MAE_reference": 0.5667648926758786,
+  "best_RMSE_reference": 0.7152860297602248,
+  "best_train_R2_reference": 0.7349672228397961,
+  "best_model_combined": "VotingEnsemble",
+  "best_R2_combined": 0.6756232700414468,
   "uq_coverage": 0.13450074515648286,
   "uq_mean_width_eV": 0.36247784806298283,
   "mc_max_corr_error": 0.01572550281364773,
-  "pareto_front_size": 1
+  "pareto_front_size": 8
 }

@@ -17,7 +17,7 @@ import time
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, VotingRegressor
 from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
@@ -36,28 +36,38 @@ def build_models() -> dict:
     -------
     dict  {name: sklearn-compatible estimator}
     """
+    lr_pipe = Pipeline([
+        ("scaler", StandardScaler()),
+        ("lr", LinearRegression(**MODEL_PARAMS["LinearRegression"])),
+    ])
+    mlp_pipe = Pipeline([
+        ("scaler", StandardScaler()),
+        ("mlp", MLPRegressor(**MODEL_PARAMS["MLP"])),
+    ])
+    xgb_mod = XGBRegressor(**MODEL_PARAMS["XGBoost"])
+
     models = {
-        "LinearRegression": Pipeline([
-            ("scaler", StandardScaler()),
-            ("lr", LinearRegression(**MODEL_PARAMS["LinearRegression"])),
-        ]),
+        "LinearRegression": lr_pipe,
         "RandomForest": RandomForestRegressor(
             **MODEL_PARAMS["RandomForest"]
         ),
         "GradientBoosting": GradientBoostingRegressor(
             **MODEL_PARAMS["GradientBoosting"]
         ),
-        "XGBoost": XGBRegressor(
-            **MODEL_PARAMS["XGBoost"]
-        ),
+        "XGBoost": xgb_mod,
         "SVR": Pipeline([
             ("scaler", StandardScaler()),
             ("svr", SVR(**MODEL_PARAMS["SVR"])),
         ]),
-        "MLP": Pipeline([
-            ("scaler", StandardScaler()),
-            ("mlp", MLPRegressor(**MODEL_PARAMS["MLP"])),
-        ]),
+        "MLP": mlp_pipe,
+        "VotingEnsemble": VotingRegressor(
+            estimators=[
+                ("lr", lr_pipe),
+                ("mlp", mlp_pipe),
+                ("xgb", xgb_mod),
+            ],
+            weights=[2, 1, 1],
+        ),
     }
     return models
 
