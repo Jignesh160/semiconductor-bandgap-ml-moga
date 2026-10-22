@@ -93,13 +93,13 @@ class BandGapProblem(Problem):
 
     def _evaluate(self, x, out, *args, **kwargs):
         df = self._to_dataframe(x)
-        df_eng = engineer_features(df)
+        df_eng = engineer_features(df, verbose=False)
 
         # Ensure columns align with the model's training features
         for col in self.feature_names:
             if col not in df_eng.columns:
                 df_eng[col] = 0.0
-        X_pred = df_eng[self.feature_names].values
+        X_pred = np.nan_to_num(df_eng[self.feature_names].values, nan=0.0, posinf=1e5, neginf=-1e5)
 
         bg_pred = self.model.predict(X_pred)
 
@@ -209,7 +209,8 @@ def extract_pareto(
         if col not in df_eng.columns:
             df_eng[col] = 0.0
 
-    df_pareto["predicted_bandgap"] = model.predict(df_eng[feature_names].values)
+    X_pred_pareto = np.nan_to_num(df_eng[feature_names].values, nan=0.0, posinf=1e5, neginf=-1e5)
+    df_pareto["predicted_bandgap"] = model.predict(X_pred_pareto)
     df_pareto["obj_bg_deviation"] = result.F[:, 0]
     df_pareto["obj_ehull"] = result.F[:, 1]
 

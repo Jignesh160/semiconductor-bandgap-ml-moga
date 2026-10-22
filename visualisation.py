@@ -165,6 +165,190 @@ def plot_predictions_vs_true(y_true, y_pred, model_name: str):
 
 
 # ──────────────────────────────────────────────────────────────────────
+# 3b. Train vs Test Accuracy Figures
+# ──────────────────────────────────────────────────────────────────────
+
+def plot_train_accuracy(results_df: pd.DataFrame, trained: dict,
+                        X_train: np.ndarray, y_train: np.ndarray):
+    """
+    Generate a multi-panel figure showing training accuracy for all models.
+    Panel 1: Parity plots (predicted vs true) for each model on TRAIN data.
+    Panel 2: Bar chart comparing train R², MAE, RMSE across models.
+    """
+    model_names = list(results_df.index)
+    n_models = len(model_names)
+
+    # ── Panel 1: Parity plots for each model on training data ──
+    ncols = 3
+    nrows = (n_models + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6 * ncols, 5.5 * nrows))
+    axes = np.array(axes).flatten()
+
+    for i, name in enumerate(model_names):
+        ax = axes[i]
+        model = trained[name]
+        y_pred = model.predict(X_train)
+
+        ax.scatter(y_train, y_pred, alpha=0.15, s=6, color="#4CAF50", rasterized=True)
+        lo = min(y_train.min(), y_pred.min())
+        hi = max(y_train.max(), y_pred.max())
+        ax.plot([lo, hi], [lo, hi], "r--", lw=1.5, label="Ideal")
+
+        r2 = results_df.loc[name, "train_R2"]
+        mae = results_df.loc[name, "train_MAE"]
+        ax.set_title(f"{name}\nTrain R²={r2:.4f}  MAE={mae:.3f} eV", fontsize=12)
+        ax.set_xlabel("True Band Gap (eV)", fontsize=10)
+        ax.set_ylabel("Predicted Band Gap (eV)", fontsize=10)
+        ax.legend(fontsize=8)
+
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    fig.suptitle("Training Data Accuracy — All Models", fontsize=16, y=1.02)
+    plt.tight_layout()
+    path = os.path.join(FIGURES_DIR, "accuracy_train.png")
+    fig.savefig(path, dpi=PLOT_DPI, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[plot] {path}")
+
+    # ── Panel 2: Bar chart of train metrics ──
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+    train_metrics = results_df[["train_MAE", "train_RMSE", "train_R2"]].copy()
+    train_metrics.columns = ["MAE", "RMSE", "R²"]
+    colours = ["#66BB6A", "#FFA726", "#42A5F5"]
+    titles = ["Train MAE (eV)", "Train RMSE (eV)", "Train R²"]
+
+    for ax, col, colour, title in zip(axes, train_metrics.columns, colours, titles):
+        train_metrics[col].plot.barh(ax=ax, color=colour, edgecolor="white")
+        ax.set_xlabel(col, fontsize=12)
+        ax.set_title(title, fontsize=14)
+        ax.invert_yaxis()
+        # Add value labels
+        for idx, v in enumerate(train_metrics[col]):
+            ax.text(v + 0.005, idx, f"{v:.4f}", va="center", fontsize=9)
+
+    fig.suptitle("Training Accuracy Metrics — All Models", fontsize=16, y=1.02)
+    plt.tight_layout()
+    path = os.path.join(FIGURES_DIR, "accuracy_train_bars.png")
+    fig.savefig(path, dpi=PLOT_DPI, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[plot] {path}")
+
+
+def plot_test_accuracy(results_df: pd.DataFrame, trained: dict,
+                       X_test: np.ndarray, y_test: np.ndarray):
+    """
+    Generate a multi-panel figure showing test accuracy for all models.
+    Panel 1: Parity plots (predicted vs true) for each model on TEST data.
+    Panel 2: Bar chart comparing test R², MAE, RMSE across models.
+    """
+    model_names = list(results_df.index)
+    n_models = len(model_names)
+
+    # ── Panel 1: Parity plots for each model on test data ──
+    ncols = 3
+    nrows = (n_models + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6 * ncols, 5.5 * nrows))
+    axes = np.array(axes).flatten()
+
+    for i, name in enumerate(model_names):
+        ax = axes[i]
+        model = trained[name]
+        y_pred = model.predict(X_test)
+
+        ax.scatter(y_test, y_pred, alpha=0.15, s=6, color="#2196F3", rasterized=True)
+        lo = min(y_test.min(), y_pred.min())
+        hi = max(y_test.max(), y_pred.max())
+        ax.plot([lo, hi], [lo, hi], "r--", lw=1.5, label="Ideal")
+
+        r2 = results_df.loc[name, "R2"]
+        mae = results_df.loc[name, "MAE"]
+        ax.set_title(f"{name}\nTest R²={r2:.4f}  MAE={mae:.3f} eV", fontsize=12)
+        ax.set_xlabel("True Band Gap (eV)", fontsize=10)
+        ax.set_ylabel("Predicted Band Gap (eV)", fontsize=10)
+        ax.legend(fontsize=8)
+
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    fig.suptitle("Test Data Accuracy — All Models", fontsize=16, y=1.02)
+    plt.tight_layout()
+    path = os.path.join(FIGURES_DIR, "accuracy_test.png")
+    fig.savefig(path, dpi=PLOT_DPI, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[plot] {path}")
+
+    # ── Panel 2: Bar chart of test metrics ──
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+    test_metrics = results_df[["MAE", "RMSE", "R2"]].copy()
+    test_metrics.columns = ["MAE", "RMSE", "R²"]
+    colours = ["#2196F3", "#FF9800", "#4CAF50"]
+    titles = ["Test MAE (eV)", "Test RMSE (eV)", "Test R²"]
+
+    for ax, col, colour, title in zip(axes, test_metrics.columns, colours, titles):
+        test_metrics[col].plot.barh(ax=ax, color=colour, edgecolor="white")
+        ax.set_xlabel(col, fontsize=12)
+        ax.set_title(title, fontsize=14)
+        ax.invert_yaxis()
+        # Add value labels
+        for idx, v in enumerate(test_metrics[col]):
+            ax.text(v + 0.005, idx, f"{v:.4f}", va="center", fontsize=9)
+
+    fig.suptitle("Test Accuracy Metrics — All Models", fontsize=16, y=1.02)
+    plt.tight_layout()
+    path = os.path.join(FIGURES_DIR, "accuracy_test_bars.png")
+    fig.savefig(path, dpi=PLOT_DPI, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[plot] {path}")
+
+
+def plot_train_vs_test_comparison(results_df: pd.DataFrame):
+    """
+    Side-by-side comparison of train vs test R² and MAE for all models.
+    Helps identify overfitting (large train-test gap).
+    """
+    model_names = list(results_df.index)
+    x_pos = np.arange(len(model_names))
+    bar_width = 0.35
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    # R² comparison
+    ax = axes[0]
+    ax.bar(x_pos - bar_width/2, results_df["train_R2"], bar_width,
+           label="Train R²", color="#66BB6A", edgecolor="white")
+    ax.bar(x_pos + bar_width/2, results_df["R2"], bar_width,
+           label="Test R²", color="#2196F3", edgecolor="white")
+    ax.set_xlabel("Model", fontsize=12)
+    ax.set_ylabel("R²", fontsize=12)
+    ax.set_title("Train vs Test R²", fontsize=14)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(model_names, rotation=25, ha="right", fontsize=10)
+    ax.legend(fontsize=10)
+    ax.axhline(y=0, color="gray", linestyle="--", linewidth=0.8)
+
+    # MAE comparison
+    ax = axes[1]
+    ax.bar(x_pos - bar_width/2, results_df["train_MAE"], bar_width,
+           label="Train MAE", color="#66BB6A", edgecolor="white")
+    ax.bar(x_pos + bar_width/2, results_df["MAE"], bar_width,
+           label="Test MAE", color="#2196F3", edgecolor="white")
+    ax.set_xlabel("Model", fontsize=12)
+    ax.set_ylabel("MAE (eV)", fontsize=12)
+    ax.set_title("Train vs Test MAE", fontsize=14)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(model_names, rotation=25, ha="right", fontsize=10)
+    ax.legend(fontsize=10)
+
+    fig.suptitle("Train vs Test Performance — Overfitting Check", fontsize=16, y=1.02)
+    plt.tight_layout()
+    path = os.path.join(FIGURES_DIR, "train_vs_test_comparison.png")
+    fig.savefig(path, dpi=PLOT_DPI, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[plot] {path}")
+
+
+# ──────────────────────────────────────────────────────────────────────
 # 4.  MOGA Pareto front
 # ──────────────────────────────────────────────────────────────────────
 

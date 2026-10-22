@@ -18,7 +18,7 @@ import pandas as pd
 from config import ALL_DESCRIPTORS, TARGET_COLUMN
 
 
-def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+def engineer_features(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     """
     Add physics-informed engineered features in-place and return
     the augmented DataFrame.
@@ -37,6 +37,18 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     lattice_ratio_ab       : a / b
     lattice_ratio_ac       : a / c
     formation_energy_sq    : formation_energy_peratom²
+    electronegativity_range: max_electronegativity - min_electronegativity
+    mass_x_en              : mean_atomic_mass * mean_electronegativity
+    en_over_radius         : mean_electronegativity / mean_covalent_radius
+    density_x_volume       : density * volume (total mass proxy)
+    formation_energy_abs   : |formation_energy_peratom|
+    radius_sq              : mean_covalent_radius²
+    z_over_radius          : mean_atomic_number / mean_covalent_radius
+    density_over_mass      : density / mean_atomic_mass
+    lattice_volume_ratio   : (a*b*c) / volume
+    en_x_formation         : mean_electronegativity * formation_energy
+    log_volume_per_atom    : log(volume / n_atoms)
+    sqrt_density           : sqrt(density)
     """
     out = df.copy()
 
@@ -75,7 +87,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Log-transformed ehull (regularises the long tail)
     if "ehull" in out.columns:
-        out["ehull_log1p"] = np.log1p(out["ehull"])
+        out["ehull_log1p"] = np.log1p(out["ehull"].clip(lower=0))
 
     # Inverse mean atomic mass — lighter atoms tend toward wider gaps
     if "mean_atomic_mass" in out.columns:
@@ -90,9 +102,75 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     if "formation_energy_peratom" in out.columns:
         out["formation_energy_sq"] = out["formation_energy_peratom"] ** 2
 
-    n_new = len(out.columns) - len(df.columns)
-    print(f"[feature_eng] Added {n_new} engineered features "
-          f"→ total {len(out.columns)} columns.")
+    # ── NEW Magpie-inspired and physics features ──────────────────────
+
+    # Electronegativity range (max - min) → drives ionic character
+    if {"max_electronegativity", "min_electronegativity"}.issubset(out.columns):
+        out["electronegativity_range"] = (
+            out["max_electronegativity"] - out["min_electronegativity"]
+        )
+
+    # Mass × electronegativity interaction
+    if {"mean_atomic_mass", "mean_electronegativity"}.issubset(out.columns):
+        out["mass_x_en"] = out["mean_atomic_mass"] * out["mean_electronegativity"]
+
+    # Electronegativity over radius — charge density proxy
+    if {"mean_electronegativity", "mean_covalent_radius"}.issubset(out.columns):
+        out["en_over_radius"] = (
+            out["mean_electronegativity"] / (out["mean_covalent_radius"] + 1e-9)
+        )
+
+    # Density × volume = total mass in cell
+    if {"density", "volume"}.issubset(out.columns):
+        out["density_x_volume"] = out["density"] * out["volume"]
+
+    # Absolute formation energy
+    if "formation_energy_peratom" in out.columns:
+        out["formation_energy_abs"] = out["formation_energy_peratom"].abs()
+
+    # Radius squared — non-linear radius dependence
+    if "mean_covalent_radius" in out.columns:
+        out["radius_sq"] = out["mean_covalent_radius"] ** 2
+
+    # Atomic number / radius — nuclear charge density
+    if {"mean_atomic_number", "mean_covalent_radius"}.issubset(out.columns):
+        out["z_over_radius"] = (
+            out["mean_atomic_number"] / (out["mean_covalent_radius"] + 1e-9)
+        )
+
+    # Density / mass — packing efficiency proxy
+    if {"density", "mean_atomic_mass"}.issubset(out.columns):
+        out["density_over_mass"] = out["density"] / (out["mean_atomic_mass"] + 1e-9)
+
+    # Lattice volume ratio — deviation from orthorhombic
+    if {"a", "b", "c", "volume"}.issubset(out.columns):
+        out["lattice_volume_ratio"] = (
+            (out["a"] * out["b"] * out["c"]) / (out["volume"] + 1e-9)
+        )
+
+    # Electronegativity × formation energy interaction
+    if {"mean_electronegativity", "formation_energy_peratom"}.issubset(out.columns):
+        out["en_x_formation"] = (
+            out["mean_electronegativity"] * out["formation_energy_peratom"]
+        )
+
+    # Log volume per atom — regularised size
+    if {"volume", "n_atoms"}.issubset(out.columns):
+        out["log_volume_per_atom"] = np.log1p(
+            (out["volume"] / (out["n_atoms"] + 1e-9)).clip(lower=0)
+        )
+
+    # Square root of density
+    if "density" in out.columns:
+        out["sqrt_density"] = np.sqrt(out["density"].clip(lower=0))
+
+    # Guard against any NaNs or infinities from edge combinations
+    out = out.fillna(0.0)
+
+    if verbose:
+        n_new = len(out.columns) - len(df.columns)
+        print(f"[feature_eng] Added {n_new} engineered features "
+              f"→ total {len(out.columns)} columns.")
     return out
 
 

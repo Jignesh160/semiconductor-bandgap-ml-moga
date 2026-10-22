@@ -63,17 +63,18 @@ python main_pipeline.py
 
 ## 📊 Benchmark Results
 
-Evaluated on an 80/20 train/test split (21,472 train / 5,368 test for reference; 45,472 train / 11,368 test for augmented data):
+Evaluated on an 80/20 train/test split (21,472 train / 5,368 test for reference; 45,472 train / 11,368 test for augmented data) with 42 physics-engineered crystal descriptors:
 
-| Model | Ref $R^2$ | Augmented $R^2$ | Ref MAE (eV) | Augmented MAE (eV) | Augmented RMSE (eV) | Training Time | Augmentation Impact |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Linear Regression** | 0.1815 | **0.1864** | 0.9033 | **0.8961** | 1.1088 | 0.2 s | **+2.7% $R^2$, Error Reduced** |
-| **Gradient Boosting** | 0.1722 | **0.1780** | 0.9088 | **0.9015** | 1.1144 | 82.9 s | **+3.4% $R^2$, Error Reduced** |
-| **XGBoost** | 0.1693 | **0.1755** | 0.9101 | **0.9022** | 1.1162 | 0.8 s | **+3.7% $R^2$, Error Reduced** |
-| **Random Forest** | 0.1515 | **0.1585** | 0.9225 | **0.9111** | 1.1276 | 15.6 s | **+4.6% $R^2$, Error Reduced** |
-| **SVR (RBF)** | -0.0851 | -0.5501 | 1.0282 | 1.2211 | 1.5304 | 16.5 s | High variance on wide bounds |
+| Model | Ref Test $R^2$ | Augmented Test $R^2$ | Ref MAE (eV) | Augmented MAE (eV) | Ref Train $R^2$ | Generalization (Train-Test Gap) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Linear Regression** | **0.6811** | **0.6640** | **0.5747** | **0.5937** | 0.6846 | **0.0035 (Near-Zero Overfitting)** |
+| **MLP (Neural Net)** | 0.6697 | 0.6615 | 0.5833 | 0.5960 | 0.7174 | 0.0477 (Strong Generalization) |
+| **XGBoost** | 0.6659 | 0.6636 | 0.5881 | 0.5974 | 0.7997 | 0.1338 |
+| **Gradient Boosting** | 0.6545 | 0.6495 | 0.5996 | 0.6123 | 0.7372 | 0.0827 |
+| **SVR (RBF)** | 0.5058 | 0.5012 | 0.7180 | 0.7286 | 0.6176 | 0.1118 |
+| **Random Forest** | 0.4184 | 0.4430 | 0.7897 | 0.7872 | 0.8839 | 0.4655 (High Overfitting) |
 
-> **Key Finding**: Augmenting the reference data with Gaussian copula Monte Carlo samples consistently improved generalization performance and reduced error across all linear, tree, and boosting models.
+> **Key Finding**: With the addition of Magpie-inspired atomic charge density, electronegativity range, and unit-cell packing descriptors, model predictive capability leaped from $R^2 \approx 0.18 \rightarrow \mathbf{0.6811}$ with MAE dropping from $\sim 0.90\text{ eV} \rightarrow \mathbf{0.5747\text{ eV}}$. Linear Regression and MLP Neural Networks showed exceptional generalization performance.
 
 ---
 
@@ -123,7 +124,11 @@ All Pareto candidates achieve the targeted $1.500\text{ eV}$ absorption gap (ide
 ## 📈 Visual Deliverables
 
 All figures are automatically generated in [`figures/`](figures/):
-- `model_comparison.png` — Model accuracy metrics ($R^2$, MAE, RMSE).
+- `accuracy_train.png` & `accuracy_train_bars.png` — Multi-model training accuracy parity plots and metric bars.
+- `accuracy_test.png` & `accuracy_test_bars.png` — Multi-model test set accuracy parity plots and metric bars.
+- `train_vs_test_comparison.png` — Side-by-side comparison of train vs test $R^2$ and MAE to assess generalization.
+- `pred_vs_true_LinearRegression.png` — Individual parity plot for the top performing model.
+- `model_comparison.png` — Overall model accuracy metrics ($R^2$, MAE, RMSE).
 - `shap_summary.png` & `shap_bar.png` — Global and local SHAP attributions.
 - `pareto_front.png` & `pareto_bg_dist.png` — 2D Pareto frontier and candidate distributions.
 - `uncertainty.png` — 90% confidence prediction interval visualization.

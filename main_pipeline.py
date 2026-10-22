@@ -32,7 +32,7 @@ if sys.platform == "win32":
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -63,6 +63,9 @@ from visualisation import (
     plot_predictions_vs_true,
     plot_pareto_front,
     plot_pareto_bandgap_dist,
+    plot_train_accuracy,
+    plot_test_accuracy,
+    plot_train_vs_test_comparison,
 )
 
 
@@ -75,7 +78,7 @@ def main():
     # Stage 1: Load reference data
     # ──────────────────────────────────────────────────────────────────
     _divider("Stage 1 — Load JARVIS Reference Data")
-    ref_df = load_reference_data()
+    ref_df = load_reference_data(force_reload=False)
     print(f"  Shape: {ref_df.shape}")
     print(f"  Band gap range: [{ref_df[TARGET_COLUMN].min():.3f}, "
           f"{ref_df[TARGET_COLUMN].max():.3f}] eV")
@@ -146,6 +149,12 @@ def main():
     y_pred_best = best_model.predict(X_test)
     plot_predictions_vs_true(y_test, y_pred_best, best_name)
 
+    # ── NEW: Train and Test accuracy figures ──
+    print("\n  Generating train/test accuracy figures …")
+    plot_train_accuracy(results_ref, trained_ref, X_train, y_train)
+    plot_test_accuracy(results_ref, trained_ref, X_test, y_test)
+    plot_train_vs_test_comparison(results_ref)
+
     # ──────────────────────────────────────────────────────────────────
     # Stage 5: Train on combined (reference + synthetic)
     # ──────────────────────────────────────────────────────────────────
@@ -196,6 +205,7 @@ def main():
     # Map name to class
     _cls_map = {
         "RandomForest": RandomForestRegressor,
+        "GradientBoosting": GradientBoostingRegressor,
     }
     if best_name in _cls_map:
         model_cls = _cls_map[best_name]
@@ -250,6 +260,7 @@ def main():
         "best_R2_reference": float(results_ref.loc[best_name, "R2"]),
         "best_MAE_reference": float(results_ref.loc[best_name, "MAE"]),
         "best_RMSE_reference": float(results_ref.loc[best_name, "RMSE"]),
+        "best_train_R2_reference": float(results_ref.loc[best_name, "train_R2"]),
         "best_model_combined": best_name_c,
         "best_R2_combined": float(results_comb.loc[best_name_c, "R2"]),
         "uq_coverage": float(coverage),

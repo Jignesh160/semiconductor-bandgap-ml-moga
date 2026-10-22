@@ -3,7 +3,7 @@ models.py
 =========
 Train, evaluate and compare regression models for band gap prediction.
 
-Models: Linear Regression, Random Forest, Gradient Boosting, XGBoost, SVR.
+Models: Linear Regression, Random Forest, Gradient Boosting, XGBoost, SVR, MLP.
 Metrics: MAE, RMSE, R².
 
 Public API
@@ -19,6 +19,7 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.svm import SVR
+from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -53,6 +54,10 @@ def build_models() -> dict:
             ("scaler", StandardScaler()),
             ("svr", SVR(**MODEL_PARAMS["SVR"])),
         ]),
+        "MLP": Pipeline([
+            ("scaler", StandardScaler()),
+            ("mlp", MLPRegressor(**MODEL_PARAMS["MLP"])),
+        ]),
     }
     return models
 
@@ -73,12 +78,13 @@ def train_evaluate(
     y_test: np.ndarray,
 ) -> tuple[pd.DataFrame, dict]:
     """
-    Train every model and evaluate on the test set.
+    Train every model and evaluate on both train and test sets.
 
     Returns
     -------
     results_df : pd.DataFrame
-        Rows = models, columns = MAE, RMSE, R², train_time_s.
+        Rows = models, columns = test MAE, RMSE, R²,
+        train MAE, RMSE, R², and train_time_s.
     trained : dict
         {name: fitted estimator}
     """
@@ -92,15 +98,29 @@ def train_evaluate(
         model.fit(X_train, y_train)
         train_time = time.perf_counter() - t0
 
+        # Test set evaluation
         y_pred_test = model.predict(X_test)
-        metrics = evaluate(y_test, y_pred_test)
-        metrics["train_time_s"] = round(train_time, 2)
-        metrics["model"] = name
-        rows.append(metrics)
+        test_metrics = evaluate(y_test, y_pred_test)
+
+        # Train set evaluation
+        y_pred_train = model.predict(X_train)
+        train_metrics = evaluate(y_train, y_pred_train)
+
+        row = {
+            "model": name,
+            "MAE": test_metrics["MAE"],
+            "RMSE": test_metrics["RMSE"],
+            "R2": test_metrics["R2"],
+            "train_MAE": train_metrics["MAE"],
+            "train_RMSE": train_metrics["RMSE"],
+            "train_R2": train_metrics["R2"],
+            "train_time_s": round(train_time, 2),
+        }
+        rows.append(row)
         trained[name] = model
 
-        print(f"R²={metrics['R2']:.4f}  MAE={metrics['MAE']:.4f}  "
-              f"({train_time:.1f}s)")
+        print(f"R²={test_metrics['R2']:.4f}  MAE={test_metrics['MAE']:.4f}  "
+              f"Train-R²={train_metrics['R2']:.4f}  ({train_time:.1f}s)")
 
     results_df = pd.DataFrame(rows).set_index("model")
     results_df = results_df.sort_values("R2", ascending=False)

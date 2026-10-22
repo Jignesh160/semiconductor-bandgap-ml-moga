@@ -84,6 +84,50 @@ _ATOMIC_MASS = {
     "Cm": 247.0,
 }
 
+# Atomic numbers (Z) for all elements
+_ATOMIC_NUMBER = {
+    "H": 1, "He": 2, "Li": 3, "Be": 4, "B": 5, "C": 6, "N": 7,
+    "O": 8, "F": 9, "Ne": 10, "Na": 11, "Mg": 12, "Al": 13, "Si": 14,
+    "P": 15, "S": 16, "Cl": 17, "Ar": 18, "K": 19, "Ca": 20,
+    "Sc": 21, "Ti": 22, "V": 23, "Cr": 24, "Mn": 25, "Fe": 26,
+    "Co": 27, "Ni": 28, "Cu": 29, "Zn": 30, "Ga": 31, "Ge": 32,
+    "As": 33, "Se": 34, "Br": 35, "Kr": 36, "Rb": 37, "Sr": 38,
+    "Y": 39, "Zr": 40, "Nb": 41, "Mo": 42, "Tc": 43, "Ru": 44,
+    "Rh": 45, "Pd": 46, "Ag": 47, "Cd": 48, "In": 49, "Sn": 50,
+    "Sb": 51, "Te": 52, "I": 53, "Xe": 54, "Cs": 55, "Ba": 56,
+    "La": 57, "Ce": 58, "Pr": 59, "Nd": 60, "Pm": 61, "Sm": 62,
+    "Eu": 63, "Gd": 64, "Tb": 65, "Dy": 66, "Ho": 67, "Er": 68,
+    "Tm": 69, "Yb": 70, "Lu": 71, "Hf": 72, "Ta": 73, "W": 74,
+    "Re": 75, "Os": 76, "Ir": 77, "Pt": 78, "Au": 79, "Hg": 80,
+    "Tl": 81, "Pb": 82, "Bi": 83, "Po": 84, "At": 85, "Rn": 86,
+    "Fr": 87, "Ra": 88, "Ac": 89, "Th": 90, "Pa": 91, "U": 92,
+    "Np": 93, "Pu": 94, "Am": 95, "Cm": 96,
+}
+
+# Pauling electronegativity
+_ELECTRONEGATIVITY = {
+    "H": 2.20, "He": 0.00, "Li": 0.98, "Be": 1.57, "B": 2.04,
+    "C": 2.55, "N": 3.04, "O": 3.44, "F": 3.98, "Ne": 0.00,
+    "Na": 0.93, "Mg": 1.31, "Al": 1.61, "Si": 1.90, "P": 2.19,
+    "S": 2.58, "Cl": 3.16, "Ar": 0.00, "K": 0.82, "Ca": 1.00,
+    "Sc": 1.36, "Ti": 1.54, "V": 1.63, "Cr": 1.66, "Mn": 1.55,
+    "Fe": 1.83, "Co": 1.88, "Ni": 1.91, "Cu": 1.90, "Zn": 1.65,
+    "Ga": 1.81, "Ge": 2.01, "As": 2.18, "Se": 2.55, "Br": 2.96,
+    "Kr": 3.00, "Rb": 0.82, "Sr": 0.95, "Y": 1.22, "Zr": 1.33,
+    "Nb": 1.60, "Mo": 2.16, "Tc": 1.90, "Ru": 2.20, "Rh": 2.28,
+    "Pd": 2.20, "Ag": 1.93, "Cd": 1.69, "In": 1.78, "Sn": 1.96,
+    "Sb": 2.05, "Te": 2.10, "I": 2.66, "Xe": 2.60, "Cs": 0.79,
+    "Ba": 0.89, "La": 1.10, "Ce": 1.12, "Pr": 1.13, "Nd": 1.14,
+    "Pm": 1.13, "Sm": 1.17, "Eu": 1.20, "Gd": 1.20, "Tb": 1.10,
+    "Dy": 1.22, "Ho": 1.23, "Er": 1.24, "Tm": 1.25, "Yb": 1.10,
+    "Lu": 1.27, "Hf": 1.30, "Ta": 1.50, "W": 2.36, "Re": 1.90,
+    "Os": 2.20, "Ir": 2.20, "Pt": 2.28, "Au": 2.54, "Hg": 2.00,
+    "Tl": 1.62, "Pb": 1.87, "Bi": 2.02, "Po": 2.00, "At": 2.20,
+    "Rn": 2.20, "Fr": 0.70, "Ra": 0.90, "Ac": 1.10, "Th": 1.30,
+    "Pa": 1.50, "U": 1.38, "Np": 1.36, "Pu": 1.28, "Am": 1.30,
+    "Cm": 1.30,
+}
+
 
 def _element_list_from_atoms_dict(atoms_dict: dict) -> list[str]:
     """Extract the list of element symbols from a JARVIS atoms dictionary."""
@@ -128,11 +172,21 @@ def _extract_features(entry: dict) -> dict | None:
     # Mean atomic mass & mean covalent radius
     masses = [_ATOMIC_MASS.get(e) for e in elements]
     radii = [_COVALENT_RADII.get(e) for e in elements]
-    if None in masses or None in radii:
+    atomic_nums = [_ATOMIC_NUMBER.get(e) for e in elements]
+    electroneg = [_ELECTRONEGATIVITY.get(e) for e in elements]
+
+    if None in masses or None in radii or None in atomic_nums:
         return None
+
+    # Filter out noble gas zero-electronegativity entries
+    en_valid = [en for en in electroneg if en is not None and en > 0]
+    if not en_valid:
+        en_valid = [0.0]  # fallback
 
     mean_mass = float(np.mean(masses))
     mean_radius = float(np.mean(radii))
+    mean_z = float(np.mean(atomic_nums))
+    mean_en = float(np.mean(en_valid))
 
     # Lattice parameters
     try:
@@ -156,12 +210,20 @@ def _extract_features(entry: dict) -> dict | None:
         "jid": entry.get("jid", ""),
         "formula": entry.get("formula", ""),
         "mean_atomic_mass": mean_mass,
+        "mean_atomic_number": mean_z,
         "mean_covalent_radius": mean_radius,
+        "mean_electronegativity": mean_en,
         "a": a,
         "b": b,
         "c": c,
         "volume": volume,
         "n_atoms": len(elements),
+        "n_elements": len(set(elements)),
+        "std_atomic_mass": float(np.std(masses)) if len(masses) > 1 else 0.0,
+        "std_electronegativity": float(np.std(en_valid)) if len(en_valid) > 1 else 0.0,
+        "std_covalent_radius": float(np.std(radii)) if len(radii) > 1 else 0.0,
+        "max_electronegativity": float(max(en_valid)),
+        "min_electronegativity": float(min(en_valid)),
     })
     return row
 
@@ -256,32 +318,60 @@ _SURROGATE_STATS = {
     "ehull":                    (0.12, 0.25, 0.0, 3.0),
     "density":                  (4.8, 2.3, 0.5, 18.0),
     "mean_atomic_mass":         (72.0, 48.0, 5.0, 210.0),
+    "mean_atomic_number":       (30.0, 18.0, 1.0, 96.0),
     "mean_covalent_radius":     (1.30, 0.32, 0.4, 2.4),
+    "mean_electronegativity":   (2.00, 0.55, 0.7, 4.0),
     "a":                        (6.2, 3.2, 2.0, 30.0),
     "b":                        (6.2, 3.4, 2.0, 30.0),
     "c":                        (8.5, 5.5, 2.0, 40.0),
     "volume":                   (280.0, 400.0, 15.0, 5000.0),
     "n_atoms":                  (8.0, 10.0, 1, 80),
+    "n_elements":               (2.5, 1.2, 1, 8),
+    "std_atomic_mass":          (25.0, 22.0, 0.0, 100.0),
+    "std_electronegativity":    (0.50, 0.35, 0.0, 2.0),
+    "std_covalent_radius":      (0.20, 0.18, 0.0, 1.0),
+    "max_electronegativity":    (2.80, 0.60, 0.7, 4.0),
+    "min_electronegativity":    (1.30, 0.55, 0.7, 3.5),
     TARGET_COLUMN:              (1.90, 1.45, 0.001, 10.0),
 }
 
 # Approximate Pearson correlations among the descriptors
 # (from JARVIS-DFT analysis of the semiconductor subset)
 _SURROGATE_CORR_KEYS = list(_SURROGATE_STATS.keys())
-_SURROGATE_CORR = np.array([
-    # fe_pa  ehull  dens  mass   rad     a      b      c     vol   natm    bg
-    [ 1.00, -0.15,  0.12, 0.05, -0.02,  0.00, -0.01, -0.02, -0.05, -0.08, -0.20],  # fe_pa
-    [-0.15,  1.00, -0.05,-0.02,  0.00,  0.03,  0.03,  0.03,  0.05,  0.05,  0.00],  # ehull
-    [ 0.12, -0.05,  1.00, 0.55, -0.10, -0.35, -0.32, -0.30, -0.40, -0.05, -0.25],  # dens
-    [ 0.05, -0.02,  0.55, 1.00,  0.60, -0.10, -0.08, -0.05, -0.10,  0.00, -0.40],  # mass
-    [-0.02,  0.00, -0.10, 0.60,  1.00,  0.15,  0.15,  0.10,  0.15,  0.05, -0.30],  # rad
-    [ 0.00,  0.03, -0.35,-0.10,  0.15,  1.00,  0.60,  0.45,  0.75,  0.40,  0.15],  # a
-    [-0.01,  0.03, -0.32,-0.08,  0.15,  0.60,  1.00,  0.40,  0.70,  0.35,  0.12],  # b
-    [-0.02,  0.03, -0.30,-0.05,  0.10,  0.45,  0.40,  1.00,  0.65,  0.35,  0.08],  # c
-    [-0.05,  0.05, -0.40,-0.10,  0.15,  0.75,  0.70,  0.65,  1.00,  0.70,  0.05],  # vol
-    [-0.08,  0.05, -0.05, 0.00,  0.05,  0.40,  0.35,  0.35,  0.70,  1.00, -0.05],  # natm
-    [-0.20,  0.00, -0.25,-0.40, -0.30,  0.15,  0.12,  0.08,  0.05, -0.05,  1.00],  # bg
-])
+_N_SURR = len(_SURROGATE_CORR_KEYS)
+# Use identity correlation as base for surrogate (will be adjusted)
+_SURROGATE_CORR = np.eye(_N_SURR)
+# Set some known physical correlations
+_key_idx = {k: i for i, k in enumerate(_SURROGATE_CORR_KEYS)}
+_known_corrs = [
+    ("mean_atomic_mass", "mean_atomic_number", 0.90),
+    ("mean_atomic_mass", "mean_covalent_radius", 0.60),
+    ("mean_atomic_mass", "density", 0.55),
+    ("mean_atomic_mass", TARGET_COLUMN, -0.40),
+    ("mean_atomic_number", "mean_covalent_radius", 0.55),
+    ("mean_atomic_number", TARGET_COLUMN, -0.35),
+    ("mean_electronegativity", TARGET_COLUMN, 0.30),
+    ("std_electronegativity", TARGET_COLUMN, 0.25),
+    ("formation_energy_peratom", TARGET_COLUMN, -0.20),
+    ("density", TARGET_COLUMN, -0.25),
+    ("density", "mean_covalent_radius", -0.10),
+    ("a", "volume", 0.75),
+    ("b", "volume", 0.70),
+    ("c", "volume", 0.65),
+    ("a", "b", 0.60),
+    ("a", "c", 0.45),
+    ("b", "c", 0.40),
+    ("n_atoms", "volume", 0.70),
+    ("n_atoms", "n_elements", 0.40),
+    ("max_electronegativity", "mean_electronegativity", 0.65),
+    ("min_electronegativity", "mean_electronegativity", 0.60),
+    ("formation_energy_peratom", "ehull", -0.15),
+]
+for k1, k2, rho in _known_corrs:
+    if k1 in _key_idx and k2 in _key_idx:
+        i, j = _key_idx[k1], _key_idx[k2]
+        _SURROGATE_CORR[i, j] = rho
+        _SURROGATE_CORR[j, i] = rho
 
 
 def _generate_surrogate_reference(n: int = 26_840, seed: int = 42) -> pd.DataFrame:
@@ -322,6 +412,7 @@ def _generate_surrogate_reference(n: int = 26_840, seed: int = 42) -> pd.DataFra
 
     df = pd.DataFrame(raw, columns=keys)
     df["n_atoms"] = df["n_atoms"].round().clip(1).astype(int)
+    df["n_elements"] = df["n_elements"].round().clip(1).astype(int)
 
     # Add metadata columns
     df["jid"] = [f"SURR-{i:05d}" for i in range(len(df))]
