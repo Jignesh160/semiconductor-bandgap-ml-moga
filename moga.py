@@ -129,7 +129,13 @@ def _descriptor_bounds(ref_df: pd.DataFrame) -> dict[str, tuple[float, float]]:
             hi = float(ref_df[col].quantile(0.99))
             # Add small margin
             margin = (hi - lo) * 0.05
-            bounds[col] = (lo - margin, hi + margin)
+            lower = lo - margin
+            upper = hi + margin
+            # Energy above hull is non-negative by definition; numerical
+            # noise in source records must not create negative search space.
+            if col == "ehull":
+                lower = max(0.0, lower)
+            bounds[col] = (lower, upper)
     return bounds
 
 
@@ -202,26 +208,20 @@ def extract_pareto(
     bounds = _descriptor_bounds(ref_df)
     descriptor_names = list(bounds.keys())
 
-    # If single solution, harvest the non-dominated Pareto front from final population
-    if len(result.X.shape) == 1 or len(result.X) < 15:
-        pop_X = result.pop.get("X")
-        pop_F = result.pop.get("F")
-        pop_G = result.pop.get("G")
-        feas = (pop_G[:, 0] <= 1e-4) if pop_G is not None else np.ones(len(pop_X), dtype=bool)
-        
-        from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
-        nds = NonDominatedSorting().do(pop_F[feas])
-        
-        # Take rank-0 and rank-1 non-dominated solutions
-        selected_idx = list(nds[0])
-        if len(selected_idx) < 15 and len(nds) > 1:
-            selected_idx.extend(list(nds[1]))
-            
-        X_mat = pop_X[feas][selected_idx]
-        F_mat = pop_F[feas][selected_idx]
-    else:
-        X_mat = result.X
-        F_mat = result.F
+    # Use only feasible rank-0 solutions. Never pad the Pareto front with
+    # dominated candidates to reach a preferred row count.
+    if result.X is None or result.F is None:
+        raise ValueError("NSGA-II returned no feasible Pareto candidates.")
+    X_mat = np.atleast_2d(result.X)
+    F_mat = np.atleast_2d(result.F)
+    feasible = np.isfinite(X_mat).all(axis=1) & np.isfinite(F_mat).all(axis=1)
+    feasible &= (X_mat[:, descriptor_names.index("ehull")] <= MOGA_EHULL_THRESHOLD)
+    X_mat, F_mat = X_mat[feasible], F_mat[feasible]
+    if not len(X_mat):
+        raise ValueError("No feasible candidates satisfy the optimizer constraints.")
+    from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
+    rank0 = NonDominatedSorting().do(F_mat, only_non_dominated_front=True)
+    X_mat, F_mat = X_mat[rank0], F_mat[rank0]
 
     # Deduplicate closely spaced coordinates
     df_pareto = pd.DataFrame(X_mat, columns=descriptor_names).drop_duplicates()
@@ -233,8 +233,12 @@ def extract_pareto(
 
     X_pred_pareto = np.nan_to_num(df_eng[feature_names].values, nan=0.0, posinf=1e5, neginf=-1e5)
     df_pareto["predicted_bandgap"] = model.predict(X_pred_pareto)
-    df_pareto["obj_bg_deviation"] = np.abs(df_pareto["predicted_bandgap"] - 1.50)
+    target_bg = float(getattr(result.problem, "target_bg", 1.50))
+    df_pareto["obj_bg_deviation"] = np.abs(df_pareto["predicted_bandgap"] - target_bg)
     df_pareto["obj_ehull"] = df_pareto["ehull"]
+    df_pareto["candidate_type"] = "hypothetical_descriptor_space_candidate"
+    df_pareto["material_id"] = pd.NA
+    df_pareto["target_bandgap_eV"] = target_bg
 
     df_pareto = df_pareto.sort_values("predicted_bandgap").reset_index(drop=True)
     return df_pareto

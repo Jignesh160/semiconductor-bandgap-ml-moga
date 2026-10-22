@@ -31,7 +31,6 @@ if sys.platform == "win32":
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -42,9 +41,10 @@ from config import (
     TARGET_COLUMN, TEST_SIZE, RANDOM_STATE,
     DATA_DIR, RESULTS_DIR, FIGURES_DIR,
     MODEL_PARAMS, ALL_DESCRIPTORS,
-    UQ_N_BOOTSTRAPS, UQ_CONFIDENCE,
+    UQ_N_BOOTSTRAPS, UQ_CONFIDENCE, MC_RANDOM_SEED,
 )
 from data_loader import load_reference_data
+from data_integrity import split_real_records
 from monte_carlo import generate_synthetic, validate_synthetic
 from feature_engineering import engineer_features, get_feature_columns
 from models import train_evaluate, get_best_model, evaluate
@@ -75,13 +75,6 @@ def _divider(title: str):
 
 def main():
     # ──────────────────────────────────────────────────────────────────
-    # Stage 0: Literature Data Collection (NER + RAG)
-    # ──────────────────────────────────────────────────────────────────
-    _divider("Stage 0 — Literature Data Collection (NER + RAG)")
-    from ner_rag_pipeline import run_ner_rag_pipeline
-    lit_df, ner_error_rate = run_ner_rag_pipeline()
-
-    # ──────────────────────────────────────────────────────────────────
     # Stage 1: Load reference data
     # ──────────────────────────────────────────────────────────────────
     _divider("Stage 1 — Load JARVIS Reference Data")
@@ -99,48 +92,53 @@ def main():
     except Exception as e:
         print(f"  [warn] Pairplot skipped: {e}")
 
+    # Split verified real records before fitting the sampler or any model.
+    ref_train, ref_test = split_real_records(
+        ref_df, test_size=TEST_SIZE, random_state=RANDOM_STATE,
+    )
+    print(f"  Real records — train: {len(ref_train):,}; test: {len(ref_test):,}")
+
     # ──────────────────────────────────────────────────────────────────
-    # Stage 2: Monte Carlo synthetic data
+    # Stage 2: Fit and sample MCS from training records only
     # ──────────────────────────────────────────────────────────────────
-    _divider("Stage 2 — Monte Carlo Synthetic Data Generation")
-    syn_df = generate_synthetic(ref_df)
+    _divider("Stage 2 — Training-Only Monte Carlo Sampling")
+    syn_df = generate_synthetic(ref_train)
+    syn_df["record_type"] = "synthetic_mcs"
+    syn_df["generator"] = "Gaussian copula fitted to real training partition"
+    syn_df["generator_seed"] = MC_RANDOM_SEED
     syn_df.to_csv(os.path.join(DATA_DIR, "synthetic_semiconductors.csv"),
                   index=False)
 
-    val = validate_synthetic(ref_df, syn_df)
+    val = validate_synthetic(ref_train, syn_df)
     val["marginals"].to_csv(
         os.path.join(RESULTS_DIR, "mc_validation_marginals.csv"), index=False)
-
-    # MC validation plots
     mc_cols = [c for c in ALL_DESCRIPTORS + [TARGET_COLUMN]
-               if c in ref_df.columns and c in syn_df.columns]
-    plot_mc_marginals(ref_df, syn_df, mc_cols)
+               if c in ref_train.columns and c in syn_df.columns]
+    plot_mc_marginals(ref_train, syn_df, mc_cols)
     plot_mc_correlation_diff(val["corr_diff"])
-
     plot_target_distribution(syn_df, tag="synthetic")
 
     # ──────────────────────────────────────────────────────────────────
-    # Stage 3: Feature engineering
+    # Stage 3: Deterministic feature engineering
     # ──────────────────────────────────────────────────────────────────
     _divider("Stage 3 — Feature Engineering")
-    ref_eng = engineer_features(ref_df)
+    train_eng = engineer_features(ref_train)
+    test_eng = engineer_features(ref_test)
     syn_eng = engineer_features(syn_df)
-    feature_cols = get_feature_columns(ref_eng)
+    feature_cols = get_feature_columns(train_eng)
     print(f"  Feature columns ({len(feature_cols)}):")
     for f in feature_cols:
         print(f"    • {f}")
 
     # ──────────────────────────────────────────────────────────────────
-    # Stage 4: Model training & comparison (reference data only)
+    # Stage 4: Real-only baseline on the locked real test set
     # ──────────────────────────────────────────────────────────────────
-    _divider("Stage 4 — Model Training (Reference Data)")
-    X_ref = ref_eng[feature_cols].values
-    y_ref = ref_eng[TARGET_COLUMN].values
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_ref, y_ref, test_size=TEST_SIZE, random_state=RANDOM_STATE,
-    )
-    print(f"  Train: {X_train.shape[0]:,}   Test: {X_test.shape[0]:,}")
+    _divider("Stage 4 — Real-Only Model Training")
+    X_train = train_eng[feature_cols].values
+    y_train = train_eng[TARGET_COLUMN].values
+    X_test = test_eng[feature_cols].values
+    y_test = test_eng[TARGET_COLUMN].values
+    print(f"  Train: {len(y_train):,}   Untouched real test: {len(y_test):,}")
 
     results_ref, trained_ref = train_evaluate(X_train, y_train, X_test, y_test)
     results_ref.to_csv(os.path.join(RESULTS_DIR, "model_comparison_reference.csv"))
@@ -163,24 +161,15 @@ def main():
     plot_train_vs_test_comparison(results_ref)
 
     # ──────────────────────────────────────────────────────────────────
-    # Stage 5: Train on combined (reference + synthetic)
+    # Stage 5: Real training rows + MCS rows, same locked real test set
     # ──────────────────────────────────────────────────────────────────
-    _divider("Stage 5 — Training on Combined Data")
-    # Ensure synthetic has same feature columns
-    for col in feature_cols:
-        if col not in syn_eng.columns:
-            syn_eng[col] = 0.0
-
-    combined = pd.concat([ref_eng, syn_eng], ignore_index=True)
-    X_comb = combined[feature_cols].values
-    y_comb = combined[TARGET_COLUMN].values
-
-    X_tr_c, X_te_c, y_tr_c, y_te_c = train_test_split(
-        X_comb, y_comb, test_size=TEST_SIZE, random_state=RANDOM_STATE,
-    )
-    print(f"  Combined train: {X_tr_c.shape[0]:,}   Test: {X_te_c.shape[0]:,}")
-
-    results_comb, trained_comb = train_evaluate(X_tr_c, y_tr_c, X_te_c, y_te_c)
+    _divider("Stage 5 — Controlled Real-Only vs Real+MCS Comparison")
+    X_synthetic = syn_eng[feature_cols].values
+    y_synthetic = syn_eng[TARGET_COLUMN].values
+    X_augmented_train = np.concatenate([X_train, X_synthetic], axis=0)
+    y_augmented_train = np.concatenate([y_train, y_synthetic], axis=0)
+    results_comb, trained_comb = train_evaluate(
+        X_augmented_train, y_augmented_train, X_test, y_test)
     results_comb.to_csv(os.path.join(RESULTS_DIR, "model_comparison_combined.csv"))
     print("\n  Combined-data model comparison:")
     print(results_comb.to_string())
@@ -242,9 +231,9 @@ def main():
     # Stage 8: Multi-Objective Optimisation (MOGA)
     # ──────────────────────────────────────────────────────────────────
     _divider("Stage 8 — Multi-Objective Genetic Algorithm (MOGA)")
-    moga_result = run_moga(best_model, feature_cols, ref_eng, verbose=False)
+    moga_result = run_moga(best_model, feature_cols, train_eng, verbose=False)
 
-    pareto_df = extract_pareto(moga_result, ref_eng, best_model, feature_cols)
+    pareto_df = extract_pareto(moga_result, train_eng, best_model, feature_cols)
     pareto_path = os.path.join(RESULTS_DIR, "pareto_solutions.csv")
     pareto_df.to_csv(pareto_path, index=False)
     print(f"  Pareto solutions saved → {pareto_path}")
@@ -262,6 +251,11 @@ def main():
     summary = {
         "reference_records": int(len(ref_df)),
         "synthetic_records": int(len(syn_df)),
+        "real_train_records": int(len(train_eng)),
+        "real_test_records": int(len(test_eng)),
+        "augmented_test_is_same_real_test": True,
+        "synthetic_generator_fit_partition": "real training records only",
+        "target_units": "eV",
         "features_used": len(feature_cols),
         "best_model_reference": best_name,
         "best_R2_reference": float(results_ref.loc[best_name, "R2"]),
