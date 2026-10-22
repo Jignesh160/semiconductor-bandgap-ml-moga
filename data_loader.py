@@ -233,75 +233,93 @@ def _extract_features(entry: dict) -> dict | None:
 # ──────────────────────────────────────────────────────────────────────
 
 _FIGSHARE_URLS = [
-    "https://figshare.com/ndownloader/files/64391379",
-    "https://ndownloader.figshare.com/files/64391379",
-    "https://ndownloader.figshare.com/files/40084921",   # 2022 version
-    "https://ndownloader.figshare.com/files/38521619",   # 2022 alt
+    # (download URL, JSON filename inside the corresponding archive)
+    ("https://ndownloader.figshare.com/files/64391379",
+     "jdft_3d-9-24-2025.json"),  # Figshare version 11
+    ("https://ndownloader.figshare.com/files/38521619",
+     "jdft_3d-12-12-2022.json"),  # Figshare version 10
 ]
-_JSON_TAGS = [
-    "jdft_3d-9-24-2025.json",
-    "jdft_3d-12-12-2022.json",
-]
-_MIN_ZIP_BYTES = 10_000_000   # legit zip is ~120 MB+
+_MIN_ZIP_BYTES = 10_000_000   # reject small HTML/error responses
+
+
+def _read_jarvis_archive(path: str) -> list[dict]:
+    """Read a Figshare JARVIS JSON archive or an extracted JSON file."""
+    import zipfile
+
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as archive:
+            members = [
+                name for name in archive.namelist()
+                if os.path.basename(name).startswith("jdft_3d")
+                and name.lower().endswith(".json")
+            ]
+            if len(members) != 1:
+                raise ValueError(
+                    "Expected one jdft_3d*.json file in the archive; "
+                    f"found {len(members)}."
+                )
+            payload = archive.read(members[0])
+    else:
+        with open(path, "rb") as source:
+            payload = source.read()
+
+    records = json.loads(payload)
+    if not isinstance(records, list) or not records:
+        raise ValueError("JARVIS JSON must contain a non-empty list of records.")
+    return records
 
 
 def _robust_jarvis_load(max_retries: int = 2) -> list[dict] | None:
     """
-    Try to download the dft_3d dataset. Returns the list of records
-    on success, or None if all sources fail.
+    Download and validate a Figshare archive using a project-local temporary
+    directory. User-level jarvis-tools caches are intentionally left untouched.
     """
-    import requests, zipfile, time
-    from jarvis.db.figshare import get_cache_dir
+    import tempfile
+    import time
+    import requests
+    import zipfile
 
-    store_dir = get_cache_dir("jarvis_data")
-
-    for url, js_tag in zip(_FIGSHARE_URLS, _JSON_TAGS * 2):
-        path = os.path.join(store_dir, js_tag + ".zip")
-
-        # Remove corrupt / tiny downloads
-        if os.path.isfile(path) and os.path.getsize(path) < _MIN_ZIP_BYTES:
-            os.remove(path)
-
-        for attempt in range(1, max_retries + 1):
-            if not os.path.isfile(path):
-                print(f"  [download] {js_tag} attempt {attempt} from {url[:60]}…")
+    errors = []
+    with tempfile.TemporaryDirectory(
+        prefix="jarvis_download_", dir=DATA_DIR
+    ) as temp_dir:
+        for url, js_tag in _FIGSHARE_URLS:
+            path = os.path.join(temp_dir, os.path.basename(js_tag) + ".zip")
+            for attempt in range(1, max_retries + 1):
+                print(f"  [download] {js_tag} attempt {attempt} from {url} …")
                 try:
-                    resp = requests.get(url, stream=True, timeout=300,
-                                        allow_redirects=True)
-                    resp.raise_for_status()
                     downloaded = 0
-                    with open(path, "wb") as f:
-                        for chunk in resp.iter_content(chunk_size=1024 * 64):
-                            f.write(chunk)
-                            downloaded += len(chunk)
+                    with requests.get(
+                        url, stream=True, timeout=300, allow_redirects=True,
+                        headers={"User-Agent": "semiconductor-bandgap-ml-moga/1.0"},
+                    ) as resp:
+                        resp.raise_for_status()
+                        with open(path, "wb") as output:
+                            for chunk in resp.iter_content(chunk_size=1024 * 64):
+                                if chunk:
+                                    output.write(chunk)
+                                    downloaded += len(chunk)
                     print(f"  [download] Received {downloaded:,} bytes")
-                except Exception as e:
-                    print(f"  [download] Failed: {e}")
-                    if os.path.isfile(path):
-                        os.remove(path)
+                    if downloaded < _MIN_ZIP_BYTES or not zipfile.is_zipfile(path):
+                        raise ValueError(
+                            "Figshare response was not a valid dataset ZIP "
+                            f"({downloaded:,} bytes); the server may have returned an HTML error page."
+                        )
+                    data = _read_jarvis_archive(path)
+                    print(f"  [data_loader] Loaded {len(data):,} entries from {js_tag}")
+                    return data
+                except Exception as exc:
+                    errors.append(f"{url}: {exc}")
+                    print(f"  [download/validate] Failed: {exc}")
+                    if os.path.exists(path):
+                        os.remove(path)  # only removes this call's temporary file
                     if attempt < max_retries:
                         time.sleep(3 * attempt)
-                    continue
 
-            # Validate
-            if os.path.isfile(path) and os.path.getsize(path) >= _MIN_ZIP_BYTES:
-                try:
-                    data = json.loads(zipfile.ZipFile(path).read(js_tag))
-                    print(f"  [data_loader] Loaded {len(data):,} entries")
-                    return data
-                except Exception as e:
-                    print(f"  [validate] Zip invalid: {e}")
-                    os.remove(path)
-            elif os.path.isfile(path):
-                os.remove(path)
-
-    # Also try jarvis-tools default
-    try:
-        print("  [fallback] jarvis-tools data() …")
-        from jarvis.db.figshare import data as jarvis_data
-        return jarvis_data(dataset=JARVIS_DATASET)
-    except Exception as e:
-        print(f"  [fallback] Also failed: {e}")
+    if errors:
+        print("  [data_loader] No usable Figshare archive was available.")
+        for error in errors:
+            print(f"    - {error}")
 
     return None
 
@@ -448,14 +466,28 @@ def load_reference_data(force_reload: bool = False) -> pd.DataFrame:
     """
     cache_path = os.path.join(DATA_DIR, "reference_semiconductors.csv")
 
-    if os.path.exists(cache_path) and not force_reload:
+    local_source = os.environ.get("JARVIS_DFT_3D_PATH")
+    if os.path.exists(cache_path) and not force_reload and not local_source:
         print(f"[data_loader] Loading cached reference data from {cache_path}")
         df = pd.read_csv(cache_path)
-        print(f"[data_loader] {len(df):,} semiconductor records loaded.")
-        return df
+        try:
+            _require_real_identifiers(df, cache_path)
+            print(f"[data_loader] {len(df):,} semiconductor records loaded.")
+            return df
+        except ValueError as exc:
+            print(f"[data_loader] Cached file is not verified reference data: {exc}")
+            print("[data_loader] Attempting to fetch and validate JARVIS data.")
 
-    print("[data_loader] Downloading JARVIS dft_3d dataset …")
-    dft_3d = _robust_jarvis_load()
+    if local_source:
+        if not os.path.isfile(local_source):
+            raise FileNotFoundError(
+                "JARVIS_DFT_3D_PATH does not point to a file: " + local_source
+            )
+        print(f"[data_loader] Reading local JARVIS archive: {local_source}")
+        dft_3d = _read_jarvis_archive(local_source)
+    else:
+        print("[data_loader] Downloading JARVIS dft_3d dataset …")
+        dft_3d = _robust_jarvis_load()
 
     if dft_3d is not None:
         # Extract features from real JARVIS records
@@ -472,15 +504,37 @@ def load_reference_data(force_reload: bool = False) -> pd.DataFrame:
         print(f"[data_loader] Kept {len(df):,} semiconductor records "
               f"(skipped {skipped:,}).")
     else:
-        # Figshare / JARVIS servers unavailable - use surrogate data
-        print("[data_loader] [WARN] JARVIS servers unreachable - "
-              "using surrogate reference dataset")
-        df = _generate_surrogate_reference()
+        raise RuntimeError(
+            "Could not retrieve JARVIS dft_3d data. No reference dataset was "
+            "written. If Figshare returns HTTP 403, download its official "
+            "jdft_3d JSON ZIP in a browser and set JARVIS_DFT_3D_PATH to that "
+            "file. Surrogate samples are not accepted as real data."
+        )
+
+    if df.empty:
+        raise RuntimeError("JARVIS download returned no usable semiconductor records.")
+    _require_real_identifiers(df, "downloaded JARVIS data")
 
     # Save cache
     df.to_csv(cache_path, index=False)
     print(f"[data_loader] Cached to {cache_path}")
     return df
+
+
+def _require_real_identifiers(df: pd.DataFrame, source: str) -> None:
+    """Reject synthetic or unprovenanced rows from the real-reference path."""
+    if "jid" not in df.columns:
+        raise ValueError(
+            f"Reference data at {source} has no JARVIS material IDs ('jid'); "
+            "it cannot be treated as verified JARVIS data."
+        )
+    ids = df["jid"].astype(str)
+    if ids.str.startswith("SURR-").any() or ids.eq("nan").any() or ids.eq("").any():
+        raise ValueError(
+            f"Reference data at {source} contains synthetic or missing IDs. "
+            "Move surrogate data to a separately labelled synthetic benchmark; "
+            "do not use it for real-material evaluation."
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────

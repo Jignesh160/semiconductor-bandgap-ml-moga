@@ -116,6 +116,7 @@ def generate_synthetic(
     n_accepted = 0
     total_tried = 0
     target_n = n_samples
+    max_draws = max(target_n * 1_000, 100_000)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -145,6 +146,12 @@ def generate_synthetic(
                 n_accepted += take
                 pbar.update(take)
             total_tried += batch
+            if total_tried > max_draws:
+                pbar.close()
+                raise RuntimeError(
+                    "MCS rejection sampling accepted too few rows within "
+                    f"{max_draws:,} draws. Check training data and configured bounds."
+                )
 
         pbar.close()
 
