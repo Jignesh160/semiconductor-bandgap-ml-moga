@@ -61,4 +61,4 @@ The corrected workflow splits verified records with `RANDOM_STATE=42` and `TEST_
 - SHAP attribution is association with model predictions, not causation.
 - Continuous optimizer outputs are hypothetical descriptor vectors. They have no material ID, formula, or structure unless independently matched and verified.
 - The current RAG passages have no verified bibliographic provenance. Its reported self-annotation accuracy is not evidence of source-grounded answers. See [docs/RAG_EVALUATION.md](docs/RAG_EVALUATION.md).
-- `FINAL_REPORT.md` intentionally reports no quantitative findings until a verified real-data run is available.
+- `FINAL_REPORT.md` records the completed verified JARVIS run and its limits. Its metrics describe one random split and do not imply experimental validation.

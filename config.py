@@ -153,7 +153,7 @@ MODEL_PARAMS = {
 # ──────────────────────────────────────────────────────────────────────
 # 7.  SHAP / Explainability
 # ──────────────────────────────────────────────────────────────────────
-SHAP_MAX_SAMPLES = 500        # subsample for SHAP computation speed
+SHAP_MAX_SAMPLES = 100        # subsample for SHAP computation speed
 SHAP_TOP_FEATURES = 15        # number of top features to display
 
 # ──────────────────────────────────────────────────────────────────────

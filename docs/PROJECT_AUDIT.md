@@ -1,61 +1,47 @@
-# Project audit (baseline before implementation)
+# Project audit and verified run
 
-Audit date: 2026-10-22 (Asia/Calcutta)
+Audit started 2026-10-22 (Asia/Calcutta); full pipeline completed later the same day.
 
-## Scope and repository state
+## Initial state and changes
 
-- Inspected `README.md`, `requirements.txt`, `.gitignore`, the requested source modules (`main_pipeline.py`, `monte_carlo.py`, `models.py`, `moga.py`, `explainability.py`, `feature_engineering.py`), `data_loader.py`, `ner_rag_pipeline.py`, `FINAL_REPORT.md`, tracked outputs and Git history.
-- Git was clean on branch `arjunkunnath-mcs-validation`; latest commits include the dashboard and reported benchmark additions. No repository `AGENTS.md` or test directory was present.
-- The initial findings were written before implementation; the remainder of this file includes verification results recorded after the incremental changes.
+The initial checkout was clean on branch `arjunkunnath-mcs-validation`, but its `data/reference_semiconductors.csv` was a surrogate dataset: all 26,840 IDs were `SURR-*`, with one formula value, `SurrogateCompound`. It was not authentic JARVIS input. The initial pipeline generated MCS before splitting and then re-split the combined real/synthetic data, so the augmented test set differed from the real-only test set and included synthetic rows. The baseline pipeline was not run against the surrogate cache.
 
-## Actual data and provenance
+Changes made before the completed run:
 
-The checked-in `data/reference_semiconductors.csv` has 26,840 rows and 21 columns. The target is `optb88vdw_bandgap` (the code treats values as eV and filters positive gaps when extracting JARVIS entries). Descriptor columns comprise `formation_energy_peratom`, `ehull`, `density`, atomic-mass/number/radius/electronegativity summaries, lattice lengths `a/b/c`, `volume`, `n_atoms`, and `n_elements`; `jid` and `formula` are metadata.
+- The loader rejects surrogate/missing IDs, automatically tries to refresh an invalid cache, supports `JARVIS_DFT_3D_PATH`, and downloads into a project-local temporary directory rather than deleting files from the user-level JARVIS cache.
+- The sampler runs after a fixed ID-based split, is fit on real training records only, and both model regimes use the same real test partition.
+- MCS now uses physical positive/nonnegative lower bounds only. Fixed upper caps were removed because empirical inverse-CDF sampling already stays within the training marginals and the old caps truncated observed tails.
+- Undefined/non-finite engineered values are handled safely; in particular the zero-density hydrogen record no longer creates an enormous mass/density ratio.
+- NSGA-II outputs are constrained to feasible non-dominated rows and labelled as hypothetical descriptor-space candidates without material IDs.
+- UQ intervals now use out-of-bag training residuals for calibration; bootstrap prediction spread alone had severe undercoverage.
 
-The checked-in file is **not a set of real JARVIS records**: all 26,840 IDs start `SURR-`; there is one formula value (`SurrogateCompound`). A diagnostic over the full CSV found 0 missing cells, 0 duplicate rows, 0 duplicate IDs, and `optb88vdw_bandgap` range 0.001–8.2382 eV (zero nonpositive targets). These numeric properties describe the surrogate CSV only. The generator in `data_loader.py` samples a multivariate normal from hard-coded approximate means, standard deviations, and correlations, then assigns those synthetic IDs/formulas. It does not download or verify the records represented by the file. `data/synthetic_semiconductors.csv` has 30,000 sampled rows and only the 19 numeric input/target columns, without source ID, record type, or generator metadata. The loader now also accepts a manually downloaded archive through `JARVIS_DFT_3D_PATH` when Figshare access returns 403.
+## Data and provenance
 
-At baseline, `load_reference_data()` accepted any existing CSV cache without provenance validation and, when download failed, silently built surrogate data in the reference cache path. This was corrected after the initial audit: the loader now rejects surrogate/missing IDs and fails without writing a substitute. A `JARVIS_DFT_3D_PATH` override now reads a downloaded JSON ZIP or JSON file locally, which supports networks that deny Figshare with HTTP 403. The override has only been tested with a controlled fixture, not a full real JARVIS archive.
+The successful run retrieved JARVIS-DFT `dft_3d` version-11 Figshare file `64391379`, archive `jdft_3d-9-24-2025.json.zip` ([official Figshare record](https://doi.org/10.6084/m9.figshare.6815699)). It read 93,902 records, extracted descriptors, and retained 26,840 positive-gap records (67,062 skipped). The current cache has 26,840 unique non-surrogate JARVIS IDs, 17,818 distinct formulas, 0 missing cells, 0 duplicate full rows, and target range 0.001–18.179 eV (mean 2.02367 eV). Target column is `optb88vdw_bandgap`; the code treats it as eV.
 
-## Architecture currently present
+MCS produced 30,000 rows from the 21,472 real training rows. Synthetic band-gap labels are generated estimates from the fitted training joint distribution, not independent DFT calculations. The sampler's maximum absolute Pearson-correlation difference was 0.183155; matching marginal statistics does not establish dependency fidelity.
 
-1. At baseline, `data_loader.py` fetched/extracted JARVIS records or generated the above surrogate fallback. The fallback is no longer used by `load_reference_data()`; verified IDs are required before caching.
-2. `monte_carlo.py` rank-transforms all available numeric descriptors plus the target, fits a Gaussian copula, samples correlated normal vectors, maps each marginal through an empirical inverse CDF, and rejects draws outside a few configured bounds.
-3. `feature_engineering.py` adds 24 deterministic features (and fills all remaining NaNs with zero); it does not learn imputation parameters.
-4. `models.py` evaluates Linear Regression, Random Forest, Gradient Boosting, XGBoost, SVR, MLP and a VotingRegressor. Standard scaling is inside pipelines for LR, SVR and MLP; others are unscaled. There is no general training-only imputation pipeline.
-5. `explainability.py` computes SHAP on the selected fitted estimator and a passed test matrix, and has bootstrap uncertainty helpers.
-6. `moga.py` searches continuous descriptor vectors with NSGA-II. These are not tied to material IDs or structures and must be called hypothetical descriptor-space vectors. Its second objective is raw `ehull`; the 1st-percentile-derived bounds can admit negative `ehull`.
-7. `ner_rag_pipeline.py` contains eight hard-coded sample passages with no identifiable bibliographic sources, retrieves by TF-IDF, and extracts values with regex. Its 32-field score is evaluated against annotations for those same passages, not an independent scientific evidence set. It is a synthetic demonstration, not evidence-grounded literature RAG.
-8. `main_pipeline.py` sequences data loading, sampling, ML, SHAP, UQ and MOGA and writes directly into tracked `data/`, `results/`, and `figures/` paths. The RAG demo remains independently runnable and is no longer invoked as a prerequisite for ML.
+## Completed experiment
 
-## Baseline evaluation protocol and existing outputs
+Random seed 42 split the records into 21,472 train and 5,368 test records. Both model regimes were tested on the same untouched real test IDs.
 
-At baseline, `main_pipeline.py` generated synthetic rows before splitting and independently re-split the combined dataset, so its augmented test set differed from the real-only test set and included synthetic rows. This was corrected after the audit: it splits verified real IDs first, fits MCS on training rows, and reuses the untouched real test set for both training regimes.
+| Training data | Best model | MAE (eV) | RMSE (eV) | R² | Test records |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Real only | Random Forest | 0.560019 | 0.818547 | 0.794483 | 5,368 |
+| Real + MCS | Random Forest | 0.607950 | 0.873358 | 0.766038 | 5,368 |
 
-The repository contains prior CSV/JSON results, including `results/pipeline_summary.json` reporting 26,840 reference rows, 30,000 synthetic rows, 42 features, `VotingEnsemble` R² 0.6887 on “reference”, and 0.6756 on “combined”. These are **reported, not reproduced**. They cannot be interpreted as real-material scores because the checked-in reference table is surrogate; the reference and combined test protocols differ; README, `FINAL_REPORT.md`, and saved result files also disagree on models, scores, augmentation effects, and Pareto counts. The audit did not run the full baseline because it would overwrite tracked results/figures and the required XGBoost, SHAP and pymoo modules are unavailable in the current Python environment.
+MCS augmentation worsened these Random Forest metrics on this split. SHAP was computed for the fitted real-only Random Forest on 100 held-out samples. OOB residual calibration used 236,796 training residuals; nominal 90% intervals covered 89.92% of the held-out set with a mean width of 2.805 eV. This is empirical coverage on one split, not a guarantee for new populations.
 
-## Reproduction environment
+NSGA-II returned four feasible Pareto rows. They are continuous descriptor vectors with no verified material ID, formula, or structure; report them as hypothetical candidates only. The RAG component remains a hard-coded, uncited demonstration corpus, and its source-grounded quality is not evaluated.
 
-Commands run include repository/source/data inspection, Python import/version checks, `python -m unittest discover -s tests -v`, `python main_pipeline.py`, loader checks, syntax compilation and `git diff --check`. In the original audit environment Python was 3.12.10 with NumPy, pandas, SciPy, scikit-learn and matplotlib; `xgboost`, `shap`, `pymoo`, `pytest` and `jarvis` were missing. The pipeline stopped at import with `ModuleNotFoundError: No module named 'xgboost'`. Loader validation rejected the surrogate cache. The current seven unittest checks pass, including local archive parsing with a controlled fixture. The user also reported HTTP 403 from both Figshare download URLs and a `jarvis-tools` invalid-ZIP error; the new manual archive route is not yet verified against an authentic archive. No baseline or corrected ML metrics were reproduced.
+## Commands and outcomes
 
-## Findings and risks (priority order)
+- `python -u main_pipeline.py` — completed successfully using the verified local cache. The first attempt exposed the zero-density numerical issue and extremely slow SHAP at 500 examples; the corrected run completed with SHAP capped at 100.
+- `python -m unittest discover -s tests -v` — 9 tests passed.
+- `python -m py_compile ...` on changed Python files — passed.
+- `git diff --check` — passed.
+- Network fetch first failed in the sandbox due DNS restrictions. With authorized network access, Figshare download succeeded (48,447,610 bytes). Before the temporary-directory fix, a refresh also failed trying to delete a protected bad ZIP in the user cache; that external cache is no longer modified.
 
-1. **Critical — provenance:** surrogate rows are cached and consumed as reference records; their fake IDs/formula make that explicit.
-2. **Critical — evaluation leakage:** MCS is fitted before the real split and the augmented data is re-split, changing both training and test populations.
-3. **High — reported results:** saved outputs and final report conflict, include unsupported scientific/material claims, and are not tied to verified real records.
-4. **High — optimizer interpretation:** outputs are continuous feature vectors, not materials; negative energy-above-hull values appear in saved solutions and the result extraction hard-codes a 1.50 eV target.
-5. **High — RAG provenance/evaluation:** the sample corpus has no citations/URLs/DOIs and its self-annotation score is not a factual RAG evaluation.
-6. **Medium — model reproducibility:** ML evaluation cannot currently run in this environment due to missing dependencies; MLP has internal early stopping, but there is no documented validation split or tuning protocol.
-7. **Medium — descriptor integrity:** correlated, independently sampled descriptors are not validated for duplicates, structural/chemical plausibility, or units; feature engineering may mask invalid/missing inputs by filling zeros.
+## Remaining limits
 
-## Recommended next steps
-
-1. Prevent a surrogate table or unprovenanced cache from being accepted as real JARVIS data; retain it only as explicitly labelled synthetic benchmark input.
-2. Split the records first, fit MCS on training rows only, and compare real-only and augmented models on the identical untouched real test rows. Mark synthetic outputs and settings.
-3. Add focused tests for split disjointness, sampler reproducibility/training-only input, metric units, optimizer feasibility/non-dominance and RAG source handling.
-4. Correct optimizer constraints/provenance labels; rank real records when a verified data source is available.
-5. Replace or clearly demote hard-coded RAG demo passages; define a source-backed evaluation set before claiming RAG quality.
-6. Rebuild results and report claims only after obtaining authenticated JARVIS data and installing the declared dependencies. Preserve the checked-in outputs until a verified replacement is available.
-
-## Blockers
-
-No real JARVIS records are present in the checkout. The cached dataset is explicitly surrogate, network-backed JARVIS acquisition is not assumed in this audit, and this environment lacks four required project/test dependencies. Real-material benchmark results, SHAP, MOGA, and source-grounded RAG quality therefore remain unverified.
+The split is random by material ID and is not composition- or structure-grouped. MCS dependency fidelity is imperfect. The synthetic labels are not ground truth. SHAP associations are not causal. Optimizer points are not verified materials. RAG quality and citations remain unverified. See [docs/EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md) and [docs/RAG_EVALUATION.md](RAG_EVALUATION.md).

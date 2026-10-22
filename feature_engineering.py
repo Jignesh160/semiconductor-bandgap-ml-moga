@@ -59,7 +59,8 @@ def engineer_features(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
 
     # Mass-to-density ratio
     if {"mean_atomic_mass", "density"}.issubset(out.columns):
-        out["mass_density_ratio"] = out["mean_atomic_mass"] / (out["density"] + 1e-9)
+        positive_density = out["density"].where(out["density"] > 0)
+        out["mass_density_ratio"] = out["mean_atomic_mass"] / positive_density
 
     # Lattice anisotropy
     if {"a", "b", "c"}.issubset(out.columns):
@@ -164,8 +165,8 @@ def engineer_features(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     if "density" in out.columns:
         out["sqrt_density"] = np.sqrt(out["density"].clip(lower=0))
 
-    # Guard against any NaNs or infinities from edge combinations
-    out = out.fillna(0.0)
+    # Guard against any NaNs or infinities from invalid/undefined inputs.
+    out = out.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
     if verbose:
         n_new = len(out.columns) - len(df.columns)

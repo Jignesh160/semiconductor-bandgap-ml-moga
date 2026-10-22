@@ -157,8 +157,10 @@ def bootstrap_uncertainty(
     Estimate prediction uncertainty via bootstrap aggregation.
 
     For each bootstrap resample of (X_train, y_train), train a fresh
-    model and predict on X_test.  The ensemble of predictions gives
-    a per-sample mean and confidence interval.
+    model and predict on X_test. Use the same model's out-of-bag training
+    residuals to calibrate prediction intervals. Bootstrap prediction spread
+    alone is not a prediction interval because it omits irreducible residual
+    error.
 
     Parameters
     ----------
@@ -173,24 +175,39 @@ def bootstrap_uncertainty(
 
     Returns
     -------
-    dict with keys 'mean', 'lower', 'upper', 'std'  (all arrays of len X_test)
+    dict with prediction arrays plus the number of out-of-bag calibration
+    residuals used.
     """
     rng = np.random.default_rng(42)
     n_train = X_train.shape[0]
     preds = np.empty((n_bootstraps, X_test.shape[0]))
+    oob_residuals = []
 
     for i in range(n_bootstraps):
         idx = rng.choice(n_train, n_train, replace=True)
         m = model_cls(**model_params)
         m.fit(X_train[idx], y_train[idx])
         preds[i] = m.predict(X_test)
+        in_bag = np.zeros(n_train, dtype=bool)
+        in_bag[np.unique(idx)] = True
+        oob_idx = np.flatnonzero(~in_bag)
+        if len(oob_idx):
+            oob_residuals.extend(
+                (y_train[oob_idx] - m.predict(X_train[oob_idx])).tolist()
+            )
+
+    if not oob_residuals:
+        raise RuntimeError("No out-of-bag residuals available for interval calibration.")
 
     alpha = (1 - confidence) / 2
+    residual_lo, residual_hi = np.quantile(oob_residuals, [alpha, 1 - alpha])
+    mean_prediction = preds.mean(axis=0)
     return {
-        "mean": preds.mean(axis=0),
-        "lower": np.quantile(preds, alpha, axis=0),
-        "upper": np.quantile(preds, 1 - alpha, axis=0),
+        "mean": mean_prediction,
+        "lower": mean_prediction + residual_lo,
+        "upper": mean_prediction + residual_hi,
         "std": preds.std(axis=0),
+        "calibration_residual_count": len(oob_residuals),
     }
 
 
